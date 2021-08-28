@@ -1,4 +1,4 @@
-import { async, ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { ChannelGraphComponent } from './channel-graph.component';
 
@@ -6,7 +6,7 @@ describe('ChannelGraphComponent', () => {
   let component: ChannelGraphComponent;
   let fixture: ComponentFixture<ChannelGraphComponent>;
 
-  beforeEach(async(() => {
+  beforeEach(waitForAsync(() => {
     TestBed.configureTestingModule({
       declarations: [ ChannelGraphComponent ]
     })

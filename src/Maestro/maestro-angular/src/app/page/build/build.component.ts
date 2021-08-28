@@ -281,6 +281,7 @@ export class BuildComponent implements OnInit, OnChanges {
   }
 
   public ngOnChanges() {
+    // Do nothing
   }
 
   public haveAzDevInfo(build: Build): boolean {

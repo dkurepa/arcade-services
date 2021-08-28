@@ -18,5 +18,6 @@ export class SubscriptionsTableComponent implements OnChanges {
   constructor() { }
 
   ngOnChanges(changes: SimpleChanges) {
+    // Do nothing
   }
 }

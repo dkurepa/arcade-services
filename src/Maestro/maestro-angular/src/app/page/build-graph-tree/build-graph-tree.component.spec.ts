@@ -1,4 +1,4 @@
-import { async, ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 
 import { BuildGraphTreeComponent } from './build-graph-tree.component';
 import { NO_ERRORS_SCHEMA, } from '@angular/core';
@@ -8,7 +8,7 @@ describe('BuildGraphTreeComponent', () => {
   let component: BuildGraphTreeComponent;
   let fixture: ComponentFixture<BuildGraphTreeComponent>;
 
-  beforeEach(async(() => {
+  beforeEach(waitForAsync(() => {
     TestBed.configureTestingModule({
       declarations: [
         BuildGraphTreeComponent,

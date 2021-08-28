@@ -81,22 +81,22 @@
       (mouseleave)="hover(undefined)">
       <td (click)="node.isFocused && toggleLock()" class="graph-icon">
         <div>
-          <span [style.visibility]="node.state == 'locked' ? 'visible' : 'hidden'" style="cursor: pointer;">
+          <span [style.visibility]="node.state === 'locked' ? 'visible' : 'hidden'" style="cursor: pointer;">
             <fa-icon icon="lock" *ngIf="node.isLocked" title="locked"></fa-icon>
           </span>
-          <span [style.visibility]="node.state == 'unlocked' ? 'visible' : 'hidden'" style="cursor: pointer;">
+          <span [style.visibility]="node.state === 'unlocked' ? 'visible' : 'hidden'" style="cursor: pointer;">
             <fa-icon icon="lock-open" *ngIf="!node.isLocked" title="unlocked"></fa-icon>
           </span>
-          <span [style.visibility]="node.state == 'conflict' ? 'visible' : 'hidden'" class="text-danger">
+          <span [style.visibility]="node.state === 'conflict' ? 'visible' : 'hidden'" class="text-danger">
             <fa-icon icon="exclamation-triangle" title="conflicting build"></fa-icon>
           </span>
-          <span [style.visibility]="node.state == 'ancestor' ? 'visible' : 'hidden'">
+          <span [style.visibility]="node.state === 'ancestor' ? 'visible' : 'hidden'">
             <fa-icon icon="ellipsis-v" title="ancestor"></fa-icon>
           </span>
-          <span [style.visibility]="node.state == 'parent' ? 'visible' : 'hidden'">
+          <span [style.visibility]="node.state === 'parent' ? 'visible' : 'hidden'">
             <fa-icon icon="angle-up" title="parent"></fa-icon>
           </span>
-          <span [style.visibility]="node.state == 'child' ? 'visible' : 'hidden'">
+          <span [style.visibility]="node.state === 'child' ? 'visible' : 'hidden'">
             <fa-icon icon="angle-right" title="child"></fa-icon>
           </span>
         </div>
@@ -123,10 +123,10 @@
         {{node.build.azureDevOpsBuildNumber}}
       </td>
       <td>
-        <span *ngIf="node.build.staleness == '0'">
+        <span *ngIf="node.build.staleness == 0">
           latest
         </span>
-        <span *ngIf="node.build.staleness != '0'">
+        <span *ngIf="node.build.staleness != 0">
           {{node.build.staleness}} behind
         </span>
       </td>

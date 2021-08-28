@@ -1,4 +1,4 @@
-import { async, ComponentFixture, TestBed } from "@angular/core/testing";
+import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { of } from 'rxjs';
 
@@ -10,7 +10,7 @@ describe("SideBarComponent", () => {
   let component: SideBarComponent;
   let fixture: ComponentFixture<SideBarComponent>;
 
-  beforeEach(async(() => {
+  beforeEach(waitForAsync(() => {
     const mockChannelService = jasmine.createSpyObj("ChannelService", ["getChannels"]);
     TestBed.configureTestingModule({
       declarations: [

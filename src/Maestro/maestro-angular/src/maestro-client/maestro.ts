@@ -1,4 +1,4 @@
-import { NgModule, Injectable, Inject, InjectionToken } from "@angular/core";
+import { NgModule, Injectable, Inject, InjectionToken, ModuleWithProviders } from "@angular/core";
 import { HttpClientModule, HttpClient, HttpHeaders, HttpParams } from "@angular/common/http";
 import { Observable } from "rxjs";
 import { map } from "rxjs/operators";
@@ -86,14 +86,14 @@ export class MaestroModule {
         defaultHeaders: {},
     };
 
-    public static forRoot(options?: Partial<MaestroOptions>) {
-        return {
-            ngModule: MaestroModule,
-            providers: [
-                { provide: MaestroOptionsToken, useValue: options || {} },
-            ],
-        };
-    }
+    public static forRoot(options?: Partial<MaestroOptions>): ModuleWithProviders<MaestroModule> {
+    return {
+        ngModule: MaestroModule,
+        providers: [
+            { provide: MaestroOptionsToken, useValue: options || {} },
+        ],
+    };
+}
 }
 
 export interface IAssetsApi {

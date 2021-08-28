@@ -29,13 +29,26 @@
               "src/themes/styles.scss"
             ],
             "scripts": [],
-            "es5BrowserSupport": true
+            "vendorChunk": true,
+            "extractLicenses": false,
+            "buildOptimizer": false,
+            "sourceMap": true,
+            "optimization": false,
+            "namedChunks": true
           },
           "configurations": {
             "production": {
               "styles": [
-                { "input": "src/themes/light/styles.scss", "bundleName": "light", "lazy": true },
-                { "input": "src/themes/dark/styles.scss", "bundleName": "dark", "lazy": true }
+                {
+                  "inject": true,
+                  "input": "src/themes/light/styles.scss",
+                  "bundleName": "light"
+                },
+                {
+                  "inject": true,
+                  "input": "src/themes/dark/styles.scss",
+                  "bundleName": "dark"
+                }
               ],
               "fileReplacements": [
                 {
@@ -50,21 +63,23 @@
               "optimization": true,
               "outputHashing": "all",
               "sourceMap": false,
-              "extractCss": true,
               "namedChunks": false,
-              "aot": true,
               "extractLicenses": true,
-              "vendorChunk": true,
               "buildOptimizer": true,
               "budgets": [
                 {
                   "type": "initial",
                   "maximumWarning": "2mb",
                   "maximumError": "5mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "6kb"
                 }
               ]
             }
-          }
+          },
+          "defaultConfiguration": ""
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
@@ -101,14 +116,11 @@
           }
         },
         "lint": {
-          "builder": "@angular-devkit/build-angular:tslint",
+          "builder": "@angular-eslint/builder:lint",
           "options": {
-            "tsConfig": [
-              "src/tsconfig.app.json",
-              "src/tsconfig.spec.json"
-            ],
-            "exclude": [
-              "**/node_modules/**"
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html"
             ]
           }
         }
@@ -132,16 +144,19 @@
           }
         },
         "lint": {
-          "builder": "@angular-devkit/build-angular:tslint",
+          "builder": "@angular-eslint/builder:lint",
           "options": {
-            "tsConfig": "e2e/tsconfig.e2e.json",
-            "exclude": [
-              "**/node_modules/**"
+            "lintFilePatterns": [
+              "e2e/**/*.ts",
+              "e2e/**/*.html"
             ]
           }
         }
       }
     }
   },
-  "defaultProject": "maestro-angular"
+  "defaultProject": "maestro-angular",
+  "cli": {
+    "defaultCollection": "@angular-eslint/schematics"
+  }
 }

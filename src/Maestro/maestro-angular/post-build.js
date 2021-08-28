@@ -11,7 +11,6 @@ const stats = JSON.parse(fs.readFileSync(statsJson));
 
 const assetOrder = [
   "runtime",
-  "es2015-polyfills",
   "polyfills",
   "vendor",
   "main",

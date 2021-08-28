@@ -13,6 +13,7 @@ export class TreeViewComponent implements OnInit {
   constructor() { }
 
   ngOnInit() {
+    // Do nothing
   }
 
 }

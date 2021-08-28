@@ -3,7 +3,7 @@
 // The list of file replacements can be found in `angular.json`.
 import { MaestroOptions } from 'src/maestro-client';
 import { TokenCredentials } from 'src/maestro-client/maestro';
-import { token } from "./token";
+//import { token } from "./token";
 
 export const environment = {
   production: false,
@@ -11,7 +11,7 @@ export const environment = {
 
 export const maestroOptions: Partial<MaestroOptions> = {
   baseUrl: "/_/",
-  credentials: new TokenCredentials(token),
+  //credentials: new TokenCredentials(token),
 }
 
 /*
@@ -21,5 +21,5 @@ export const maestroOptions: Partial<MaestroOptions> = {
  * This import should be commented out in production mode because it will have a negative impact
  * on performance if an error is thrown.
  */
-import "zone.js/dist/zone-error";  // Included with Angular CLI.
+import "zone.js/plugins/zone-error";  // Included with Angular CLI.
 

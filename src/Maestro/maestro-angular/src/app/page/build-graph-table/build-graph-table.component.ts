@@ -1,7 +1,5 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { Build, BuildGraph, BuildRef } from 'src/maestro-client/models';
 import { topologicalSort } from 'src/helpers';
-import { trigger, transition, style, animate } from '@angular/animations';
 import { ApplicationInsightsService } from 'src/app/services/application-insights.service';
 
 type BuildState = "locked" | "unlocked" | "conflict" | "ancestor" | "parent" | "child";

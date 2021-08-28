@@ -10,6 +10,7 @@ export class MainComponent implements OnInit {
   public constructor() { }
 
   public ngOnInit() {
+    // Do nothing
   }
 
 }
