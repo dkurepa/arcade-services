@@ -1,0 +1,30 @@
+This document will attempt to describe all scripts in the arcade-services repo:
+
+- azure-pipeline-codeql: Contains the configuration for the [arcade-services-codeql pipeline](https://dev.azure.com/dnceng/internal/_build?definitionId=1084) , which is a pipeline that triggers every monday and runs the CodeQL3000 task. Currently we have 9 errors on High Alert there, and I don't know if we're actively looking at them. A bit more info at [url](https://github.com/dotnet/core-eng/issues/15329).
+- azure-pipeline-weekly: Configuration for the azure-services weekly pipeline that rotates the secrets used by the repo
+- azure-pipelines: Configuration for the acrade-services pipeline, which does multiple things, includeing Build Validation and deployment. It uses different templates which will be described later
+- CodeCoverage.runsettings: configuration file for the Code Coverage
+- CredScanSuppressions.json: not sure, doesn't appear to be used currently, from what I can see
+- fix-npm-build-for-vs2019.cmd: not sure, doesn't appear to be used anymore. Added as a part of [#1340](https://github.com/dotnet/arcade-services/pull/1340)
+- grafana-setup.yml: configuration for the dotnet-arcade-services - grafana pipeline. Doesn't appear to be used anymore, as it was last run on [2021-11-10](https://dev.azure.com/dnceng/internal/_build?definitionId=632&_a=summary)
+- eng/BuildTask.targets: not sure, need some help to understand this one. Consumed by Microsoft.DotNet.Maestro.Tasks and the Monitoring Sdk
+- eng/codeql.ps1: contains powershell functions for installing initializing and running Microsoft.Guardian
+- eng/convert-codecoveragetoxml.ps1: converts code coverage results to xml, used in the arcade-services-ci pipeline
+- eng/create-tag.ps1: not used anymore
+- eng/deploy.yaml: script used for deploying the following services: Telemetry service, dotnet-status web service, rollout scorer and Maestro. Used in the arcade-services-internal-ci pipeline
+- eng/enforce-issue.ps1: script used to verify github issue structure
+- eng/firewall.ps1: script that contains functions for disabling and re enabling the SQL database firewall. Used during Maestro deployment
+- eng/generate-sbom.yml: generates the sbom and publishes it as an artifact
+- eng/helpers.psm1: a wrapper helper method around github. Displays errors and warnings in a nicer way
+- eng/import-grafana.ps1: not used. Script used to fetch grafana secrets from known vaults [#1017](https://github.com/dotnet/arcade-services/pull/1017)
+- eng/Install-SqlExpress.ps1: Downloads and installs sql express. Used during the code coverage generation in the arcade-services-internal-ci pipeline
+- eng/local-codeql.ps1: Downloads, Initializes and runs the Microsoft Guardian tool. Not used
+- eng/PoliCheckExclusions.xml: Excludes the auto generated Swagger folder from SQL scan that was causing a false positive
+- eng/refresh-service-fabric-services.ps1: not used anymore. More info on [#1066](https://github.com/dotnet/arcade-services/pull/1066)
+- eng/set-version-parameters.ps1: sets the VersionPrefix parameter to the latest git tag (I think?)
+- eng/Signing.props: Signing configuration telling the signing tool to sign 3rd party libraries with a 3rd party certificate. Doesn't look like it's used by anything
+- eng/test.yaml: runs and publishes the code coverage tool
+- eng/Version.Details.xml:
+- eng/Version.Props:
+- eng/deployment/app.bicep: bicep script used to deploy SF clusters. Some info on bicep: https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/deployment-script-bicep
+- eng/deployment/deploy.ps1: script used to deploy service fabric applications. Uses the app.bicep template. Used to deploy both Maestro and the Telemetry service fabric clusters
