@@ -14,7 +14,7 @@
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Octokit" />
     <PackageReference Include="WindowsAzure.Storage" />
-    <PackageReference Include="Microsoft.DotNet.Services.Utility" VersionOverride="1.1.0-beta.23081.2"/>
+    <PackageReference Include="Microsoft.DotNet.Services.Utility" />
   </ItemGroup>
   <ItemGroup>
     <None Update="config.json">

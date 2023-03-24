@@ -5,6 +5,58 @@
       <Uri>https://github.com/dotnet/arcade-services</Uri>
       <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
     </Dependency>
+    <Dependency Name="Microsoft.DncEng.Configuration.Extensions" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.ServiceFabric.ServiceHost" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Kusto" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjection.Abstractions" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjectionCodeGen" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.Utility" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.GitHub.Authentication" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Authentication.Algorithms" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Internal.Health" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Web.Authentication" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Internal.DependencyInjection.Testing" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DotNet.Web.Authentication.Tests" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.DncEng.CommandLineLib" Version="1.1.0-beta.23081.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    </Dependency>
   </ProductDependencies>
   <ToolsetDependencies>
     <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="6.0.0-beta.23167.1">

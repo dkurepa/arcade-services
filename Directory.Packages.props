@@ -76,9 +76,22 @@
     <PackageVersion Include="Microsoft.CodeCoverage" Version="17.4.1" />
     <PackageVersion Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="2.1.4" />
+    <PackageVersion Include="Microsoft.DncEng.CommandLineLib" Version="$(MicrosoftDncEngCommandLineLibVersion)" />
+    <PackageVersion Include="Microsoft.DncEng.Configuration.Extensions" Version="$(MicrosoftDncEngConfigurationExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Authentication.Algorithms" Version="$(MicrosoftDotNetAuthenticationAlgorithmsVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.GitHub.Authentication" Version="$(MicrosoftDotNetGitHubAuthenticationVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Internal.DependencyInjection.Testing" Version="$(MicrosoftDotNetInternalDependencyInjectionTestingVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Internal.Health" Version="$(MicrosoftDotNetInternalHealthVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Internal.Testing.DependencyInjectionCodeGen" Version="$(MicrosoftDotNetInternalTestingDependencyInjectionCodeGenVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Internal.Testing.DependencyInjection.Abstractions" Version="$(MicrosoftDotNetInternalTestingDependencyInjectionAbstractionsVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Internal.Testing.Utility" Version="$(MicrosoftDotNetInternalTestingUtilityVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Kusto" Version="$(MicrosoftDotNetKustoVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.ServiceFabric.ServiceHost" Version="$(MicrosoftDotNetServiceFabricServiceHostVersion)" />
     <PackageVersion Include="Microsoft.DotNet.Services.Utility" Version="$(MicrosoftDotNetServicesUtilityVersion)" />
     <PackageVersion Include="Microsoft.DotNet.SwaggerGenerator.MSBuild" Version="$(MicrosoftDotNetSwaggerGeneratorMSBuildVersion)" />
     <PackageVersion Include="Microsoft.DotNet.VersionTools" Version="$(MicrosoftDotNetVersionToolsVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Web.Authentication" Version="$(MicrosoftDotNetWebAuthenticationVersion)" />
+    <PackageVersion Include="Microsoft.DotNet.Web.Authentication.Tests" Version="$(MicrosoftDotNetWebAuthenticationVersion)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(AspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(AspNetCoreVersion)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(AspNetCoreVersion)" />
