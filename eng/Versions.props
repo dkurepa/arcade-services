@@ -15,6 +15,7 @@
     <MicrosoftDotNetGitIssueManagerVersion>6.0.0-beta.23167.1</MicrosoftDotNetGitIssueManagerVersion>
     <MicrosoftDotNetVersionToolsVersion>6.0.0-beta.23167.1</MicrosoftDotNetVersionToolsVersion>
     <MicrosoftNetTestSdkVersion>17.4.1</MicrosoftNetTestSdkVersion>
+    <MicrosoftDotNetServicesUtilityVersion>1.1.0-beta.23081.2</MicrosoftDotNetServicesUtilityVersion>
   </PropertyGroup>
   <!--Package names-->
   <PropertyGroup>
