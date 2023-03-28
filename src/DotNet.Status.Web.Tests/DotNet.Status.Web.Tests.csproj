@@ -43,6 +43,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DotNet.Status.Web\DotNet.Status.Web.csproj" />
-    <ProjectReference Include="..\Shared\Microsoft.DotNet.Web.Authentication.Tests\Microsoft.DotNet.Web.Authentication.Tests.csproj" />
   </ItemGroup>
 </Project>
