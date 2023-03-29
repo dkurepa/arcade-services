@@ -1,65 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Dependencies>
   <ProductDependencies>
-    <Dependency Name="Microsoft.DotNet.Services.Utility" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Services.Utility" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DncEng.Configuration.Extensions" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DncEng.Configuration.Extensions" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.ServiceFabric.ServiceHost" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.ServiceFabric.ServiceHost" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Kusto" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Kusto" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjection.Abstractions" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjection.Abstractions" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjectionCodeGen" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.DependencyInjectionCodeGen" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.Testing.Utility" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.Testing.Utility" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.GitHub.Authentication" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.GitHub.Authentication" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Authentication.Algorithms" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Authentication.Algorithms" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.Health" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.Health" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Web.Authentication" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Web.Authentication" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.DependencyInjection.Testing" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.DependencyInjection.Testing" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DncEng.CommandLineLib" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DncEng.CommandLineLib" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.Logging" Version="1.1.0-beta.23177.2">
+    <Dependency Name="Microsoft.DotNet.Internal.Logging" Version="1.1.0-beta.23178.2">
       <Uri>https://github.com/dotnet/arcade-services</Uri>
-      <Sha>6d34a3bc11c7ebd1a4df18fd058fc1419dcf3fa2</Sha>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Internal.DependencyInjection" Version="1.1.0-beta.23177.2">
-      <Uri>arcade-services</Uri>
-      <Sha>9193a829a3e45de43391d8409ec2ee1d90e77dc4</Sha>
+    <Dependency Name="Microsoft.DotNet.Internal.DependencyInjection" Version="1.1.0-beta.23178.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
+    </Dependency>
+    <Dependency Name="ServiceFabricMocks" Version="1.1.0-beta.23178.2">
+      <Uri>https://github.com/dotnet/arcade-services</Uri>
+      <Sha>3e6041c038355887c7b251bbff5324eacf22ae75</Sha>
     </Dependency>
   </ProductDependencies>
   <ToolsetDependencies>
