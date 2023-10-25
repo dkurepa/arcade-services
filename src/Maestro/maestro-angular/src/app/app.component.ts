@@ -53,6 +53,8 @@ export class AppComponent implements OnInit {
 
   public ngOnInit(): void {
     this.currentTheme = this.cookieService.get(AppComponent.themeCookieName) || "light";
+    console.log(location);
+    console.log(this.returnUrl);
   }
 
   public selectTheme(name: string) {
