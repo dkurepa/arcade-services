@@ -44,7 +44,7 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult SignIn(string returnUrl = null)
     {
-        string redirectUrl = Url.Action(nameof(LogInCallback), "Account", new {returnUrl});
+        string redirectUrl = Url.Action(nameof(LogInCallback), "Account", new {returnUrl}).Replace("http:", "https:");
         AuthenticationProperties properties =
             SignInManager.ConfigureExternalAuthenticationProperties(Startup.GitHubScheme, redirectUrl);
         return Challenge(properties, Startup.GitHubScheme);
