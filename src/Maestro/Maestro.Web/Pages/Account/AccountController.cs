@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
 
 namespace Maestro.Web.Pages.Account;
@@ -21,16 +22,19 @@ public class AccountController : Controller
     public AccountController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
-        BuildAssetRegistryContext context)
+        BuildAssetRegistryContext context,
+        ILogger<AccountController> logger)
     {
         SignInManager = signInManager;
         UserManager = userManager;
         Context = context;
+        _logger = logger;
     }
 
     public SignInManager<ApplicationUser> SignInManager { get; }
     public UserManager<ApplicationUser> UserManager { get; }
     public BuildAssetRegistryContext Context { get; }
+    private readonly ILogger<AccountController> _logger;
 
     [HttpGet("/Account/SignOut")]
     [AllowAnonymous]
@@ -44,7 +48,12 @@ public class AccountController : Controller
     [AllowAnonymous]
     public IActionResult SignIn(string returnUrl = null)
     {
-        string redirectUrl = Url.Action(nameof(LogInCallback), "Account", new {returnUrl}).Replace("http:", "https:");
+        string redirectUrl = Url.Action(nameof(LogInCallback), "Account", new { returnUrl });
+        _logger.LogInformation("Redirect URL before transforming it {redirectURL}", redirectUrl);
+
+        redirectUrl = redirectUrl.Replace("http:", "https:");
+        _logger.LogInformation("Redirect URL after transforming it {redirectURL}", redirectUrl);
+
         AuthenticationProperties properties =
             SignInManager.ConfigureExternalAuthenticationProperties(Startup.GitHubScheme, redirectUrl);
         return Challenge(properties, Startup.GitHubScheme);
