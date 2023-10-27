@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Maestro.Data;
 using Maestro.Web.Pages.Account;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Web.Authentication;
@@ -104,6 +106,10 @@ public partial class Startup
                         }
                     };
                 });
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+        });
         services.ConfigureExternalCookie(
             options =>
             {
