@@ -108,7 +108,8 @@ public partial class Startup
                 });
         services.Configure<ForwardedHeadersOptions>(options =>
         {
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+            options.ForwardedHeaders =
+                ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
         });
         services.ConfigureExternalCookie(
             options =>

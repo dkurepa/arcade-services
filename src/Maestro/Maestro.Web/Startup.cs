@@ -429,6 +429,7 @@ public partial class Startup : StartupBase
 
     public override void Configure(IApplicationBuilder app)
     {
+        app.UseForwardedHeaders();
         if (HostingEnvironment.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
