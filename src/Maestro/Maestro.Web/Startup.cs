@@ -429,11 +429,6 @@ public partial class Startup : StartupBase
 
     public override void Configure(IApplicationBuilder app)
     {
-        app.Use((context, next) =>
-        {
-            context.Request.Scheme = "https";
-            return next(context);
-        });
         app.UseForwardedHeaders();
         if (HostingEnvironment.IsDevelopment())
         {
@@ -441,6 +436,11 @@ public partial class Startup : StartupBase
         }
         else
         {
+            app.Use((context, next) =>
+            {
+                context.Request.Scheme = "https";
+                return next(context);
+            });
             app.UseHsts();
         }
 
