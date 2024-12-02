@@ -279,24 +279,37 @@ public abstract class VmrManagerBase
 
                 var builds = await barClient.GetBuildsAsync(dependency.RepoUri, dependency.Commit);
 
+                VmrDependencyUpdate update;
                 if (builds.Count() != 1)
                 {
-                    _logger.LogInformation("Expected to find one build for repo {repo} and commit {commit}, but found {number} builds" +
+                    _logger.LogInformation("Expected to find one build for repo {repo} and commit {commit}, but found {number} builds. " +
                         "Will proceed with the code flow normally, but won't have any BAR data for this repo",
                         dependency.RepoUri,
                         dependency.Commit,
                         builds.Count());
-                }
-                var build = builds.SingleOrDefault();
 
-                var update = new VmrDependencyUpdate(
-                    mapping,
-                    dependency.RepoUri,
-                    dependency.Commit,
-                    dependency.Version,
-                    repo.Mapping,
-                    build?.AzureDevOpsBuildNumber,
-                    build?.Id);
+                    update = new VmrDependencyUpdate(
+                        mapping,
+                        dependency.RepoUri,
+                        dependency.Commit,
+                        dependency.Version,
+                        repo.Mapping,
+                        null,
+                        null);
+                }
+                else
+                {
+                    var build = builds.SingleOrDefault();
+
+                    update = new VmrDependencyUpdate(
+                        mapping,
+                        dependency.RepoUri,
+                        dependency.Commit,
+                        dependency.Version,
+                        repo.Mapping,
+                        build?.AzureDevOpsBuildNumber,
+                        build?.Id);
+                }
 
                 if (transitiveDependencies.TryAdd(mapping, update))
                 {
