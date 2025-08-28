@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.DotNet.DarcLib.Models;
 using Microsoft.DotNet.DarcLib.Models.Darc;
+using Microsoft.DotNet.DarcLib.Models.VirtualMonoRepo;
 using Newtonsoft.Json.Linq;
 using NuGet.Versioning;
 
@@ -19,14 +20,6 @@ namespace Microsoft.DotNet.DarcLib.Helpers;
 /// </summary>
 public interface IDependencyFileManager
 {
-    Task<bool> TryAddOrUpdateDependency(
-        DependencyDetail dependency,
-        string repoUri,
-        string? branch,
-        UnixPath? relativeBasePath = null,
-        bool versionDetailsOnly = false,
-        bool? repoHasVersionDetailsProps = null);
-
     Task AddDependencyAsync(
         DependencyDetail dependency,
         string repoUri,
@@ -35,19 +28,19 @@ public interface IDependencyFileManager
         bool versionDetailsOnly = false,
         bool? repoHasVersionDetailsProps = null);
 
-    Task<bool> TryRemoveDependencyAsync(
-        string dependencyName,
-        string repoUri,
-        string branch,
-        UnixPath? relativeBasePath = null,
-        bool? repoHasVersionDetailsProps = null);
-
     Task RemoveDependencyAsync(
         string dependencyName,
         string repoUri,
         string branch,
         UnixPath? relativeBasePath = null,
         bool? repoHasVersionDetailsProps = null);
+
+    Task<VersionFileChanges<DependencyUpdate>> TryApplyVersionDetailsChangesAsync(
+        VersionFileChanges<DependencyUpdate> changes,
+        string repoUri,
+        string branch,
+        bool repoHasVersionDetailsProps,
+        UnixPath? relativeBasePath = null);
 
     Dictionary<string, HashSet<string>> FlattenLocationsAndSplitIntoGroups(Dictionary<string, HashSet<string>> assetLocationMap);
 
@@ -70,7 +63,7 @@ public interface IDependencyFileManager
 
     Task<XmlDocument> ReadVersionDetailsXmlAsync(string repoUri, string branch, UnixPath? relativeBasePath = null);
 
-    Task<XmlDocument> ReadVersionPropsAsync(string repoUri, string branch, UnixPath? relativeBasePath = null);
+    Task<XmlDocument> ReadVersionsPropsAsync(string repoUri, string branch, UnixPath? relativeBasePath = null);
 
     Task<GitFileContentContainer> UpdateDependencyFiles(
         IEnumerable<DependencyDetail> itemsToUpdate,

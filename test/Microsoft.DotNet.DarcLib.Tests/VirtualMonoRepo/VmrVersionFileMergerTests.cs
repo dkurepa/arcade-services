@@ -390,38 +390,56 @@ public class VmrVersionFileMergerTests
         _versionDetailsParserMock.Setup(p => p.ParseVersionDetailsXml(It.IsAny<string>(), It.IsAny<bool>()))
             .Returns((string key, bool _) => versionDetailsDictionary[key]);
 
-        _dependencyFileManagerMock.Setup(d => d.TryRemoveDependencyAsync(packageAlreadyRemovedInRepo, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<UnixPath>(), It.IsAny<bool>()))
-            .ReturnsAsync(false);
-        _dependencyFileManagerMock.Setup(d => d.TryRemoveDependencyAsync(It.Is<string>(name => name != packageAlreadyRemovedInRepo), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<UnixPath>(), It.IsAny<bool>()))
-            .Callback((string name, string repo, string commit, UnixPath? _, bool? _) =>
+        VersionFileChanges<DependencyUpdate> appliedChanges = new([], [], []);
+        _dependencyFileManagerMock.Setup(d => d.TryApplyVersionDetailsChangesAsync(It.IsAny<VersionFileChanges<DependencyUpdate>>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<UnixPath?>()))
+            .Callback((VersionFileChanges<DependencyUpdate> changes, string _, string __, bool ___, UnixPath? ____) =>
             {
-                var versionDetails = versionDetailsDictionary[targetCurrentKey];
-                versionDetailsDictionary[targetCurrentKey] = new VersionDetails(
-                    versionDetails.Dependencies.Where(d => d.Name != name).ToList(),
-                    versionDetails.Source);
-            })
-            .ReturnsAsync(true);
-
-        _dependencyFileManagerMock.Setup(d => d.TryAddOrUpdateDependency(It.IsAny<DependencyDetail>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<UnixPath>(), It.IsAny<bool>(), It.IsAny<bool>()))
-            .Callback((DependencyDetail dependency, string repo, string commit, UnixPath? _, bool _, bool? _) =>
-            {
-                var versionDetails = versionDetailsDictionary[targetCurrentKey];
-                var dep = versionDetails.Dependencies.FirstOrDefault(d => d.Name == dependency.Name);
-                if (dep == null)
+                // Apply the changes to the targetCurrentKey in the versionDetailsDictionary
+                foreach (var addition in changes.Additions.Values)
                 {
+                    var dep = (DependencyDetail)addition.Value!;
+                    var versionDetails = versionDetailsDictionary[targetCurrentKey];
+                    if (versionDetails.Dependencies.Any(d => d.Name == dep.Name))
+                    {
+                        continue;
+                    }
+
                     versionDetailsDictionary[targetCurrentKey] = new VersionDetails(
                         [
                             ..versionDetails.Dependencies,
-                            dependency
+                            dep
                         ],
                         versionDetails.Source);
+                    appliedChanges.Additions.Add(addition.Name, addition);
                 }
-                else
+                foreach (var removal in changes.Removals)
                 {
-                    dep.Version = dependency.Version; 
+                    var versionDetails = versionDetailsDictionary[targetCurrentKey];
+                    if (!versionDetails.Dependencies.Any(d => d.Name == removal))
+                    {
+                        continue;
+                    }
+
+                    versionDetailsDictionary[targetCurrentKey] = new VersionDetails(
+                        versionDetails.Dependencies.Where(d => d.Name != removal).ToList(),
+                        versionDetails.Source);
+                    appliedChanges.Removals.Add(removal);
+                }
+                foreach (var update in changes.Updates.Values)
+                {
+                    var dep = (DependencyDetail)update.Value!;
+                    var versionDetails = versionDetailsDictionary[targetCurrentKey];
+                    if (versionDetails.Dependencies.Any(d => d.Name == dep.Name && d.Version == dep.Version))
+                    {
+                        continue;
+                    }
+
+                    var existingDep = versionDetails.Dependencies.First(d => d.Name == dep.Name);
+                    existingDep.Version = dep.Version;
+                    appliedChanges.Updates.Add(update.Name, update);
                 }
             })
-            .ReturnsAsync(true);
+            .ReturnsAsync((VersionFileChanges<DependencyUpdate> changes, string _, string __, bool ___, UnixPath? ____) => appliedChanges);
 
         var result = await _vmrVersionFileMerger.MergeVersionDetails(
             _targetRepoMock.Object,
@@ -438,13 +456,13 @@ public class VmrVersionFileMergerTests
             .Select(d => (d.Name, d.Version))
             .Should()
             .BeEquivalentTo(expectedVersions, options => options.WithStrictOrdering());
-        result.Additions.Should().HaveCount(2);
+        result.Additions.Should().HaveCount(1);
         // there should only be one removal because Package.That.Is.Already.Removed.In.Repo was already removed in the target repo
         result.Removals.Should().HaveCount(1);
         result.Updates.Should().HaveCount(1);
         List<(string, string)> expectedAdditions = [
-            ("Package.Added.In.Both", "2.2.2"),
-            ("Package.Added.In.VMR", "2.0.0")];
+            ("Package.Added.In.VMR", "2.0.0")
+        ];
         result.Additions.Values
             .Select(a => (DependencyDetail)a.Value!)
             .Select(d => (d.Name, d.Version))

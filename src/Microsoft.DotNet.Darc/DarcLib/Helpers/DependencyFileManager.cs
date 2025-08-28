@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using Microsoft.DotNet.DarcLib.Models;
 using Microsoft.DotNet.DarcLib.Models.Darc;
+using Microsoft.DotNet.DarcLib.Models.VirtualMonoRepo;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using NuGet.Versioning;
@@ -99,7 +100,7 @@ public class DependencyFileManager : IDependencyFileManager
     public async Task<XmlDocument> ReadVersionDetailsXmlAsync(string repoUri, string branch, UnixPath relativeBasePath = null)
         => await ReadXmlFileAsync(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), repoUri, branch);
 
-    public async Task<XmlDocument> ReadVersionPropsAsync(string repoUri, string branch, UnixPath relativeBasePath = null)
+    public async Task<XmlDocument> ReadVersionsPropsAsync(string repoUri, string branch, UnixPath relativeBasePath = null)
         => await ReadXmlFileAsync(GetVersionFilePath(VersionFiles.VersionsProps, relativeBasePath), repoUri, branch);
 
     public async Task<bool> VersionDetailsPropsExistsAsync(string repoUri, string branch, UnixPath relativeBasePath = null)
@@ -206,33 +207,6 @@ public class DependencyFileManager : IDependencyFileManager
     }
 
     /// <summary>
-    /// Tries to add a new or update an existing dependency in the repository.
-    /// </summary>
-    /// <returns>True if the dependency is added or updated, false if it already existed in the desired version</returns>
-    public async Task<bool> TryAddOrUpdateDependency(
-        DependencyDetail dependency,
-        string repoUri,
-        string branch,
-        UnixPath relativeBasePath = null,
-        bool versionDetailsOnly = false,
-        bool? repoHasVersionDetailsProps = null)
-    {
-        var versionDetails = _versionDetailsParser.ParseVersionDetailsXml(await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath));
-
-        if (versionDetails.Dependencies.Any(d =>
-            d.Name == dependency.Name
-            && d.Version == dependency.Version
-            && d.RepoUri == dependency.RepoUri
-            && d.Commit == dependency.Commit))
-        {
-            return false;
-        }
-
-        await AddDependencyAsync(dependency, repoUri, branch, relativeBasePath, versionDetailsOnly, repoHasVersionDetailsProps);
-        return true;
-    }
-
-    /// <summary>
     /// Add a new dependency to the repository
     /// </summary>
     /// <param name="dependency">Dependency to add.</param>
@@ -253,45 +227,53 @@ public class DependencyFileManager : IDependencyFileManager
             repoHasVersionDetailsProps = await VersionDetailsPropsExistsAsync(repoUri, branch, relativeBasePath);
         }
 
-        await AddDependencyToVersionDetailsAsync(repoUri, branch, dependency, repoHasVersionDetailsProps.Value, relativeBasePath);
+        XmlDocument versionDetails = await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath);
+        bool dependencyAddedOrUpdated = TryAddOrUpdateVersionDetailsDependency(versionDetails, dependency);
 
-        if (!versionDetailsOnly)
+        if (!dependencyAddedOrUpdated)
         {
-            // Should the dependency go to global.json?
-            if (_knownAssetNames.ContainsKey(dependency.Name))
+            return;
+        }
+        else
+        {
+            List<GitFile> updatedGitFiles = [
+                new GitFile(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), versionDetails)
+            ];
+            if (repoHasVersionDetailsProps.Value)
             {
-                if (!_sdkMapping.TryGetValue(dependency.Name, out var parent))
+                updatedGitFiles.Add(new GitFile(
+                    GetVersionFilePath(VersionFiles.VersionDetailsProps, relativeBasePath),
+                    GenerateVersionDetailsProps(_versionDetailsParser.ParseVersionDetailsXml(versionDetails))));
+            }
+
+            if (!versionDetailsOnly)
+            {
+                // Should the dependency go to global.json?
+                if (_knownAssetNames.ContainsKey(dependency.Name))
                 {
-                    throw new Exception($"Dependency '{dependency.Name}' has no parent mapping defined.");
+                    if (!_sdkMapping.TryGetValue(dependency.Name, out var parent))
+                    {
+                        throw new Exception($"Dependency '{dependency.Name}' has no parent mapping defined.");
+                    }
+
+                    JObject globalJson = await ReadGlobalJsonAsync(repoUri, branch, relativeBasePath);
+                    if (TryAddDependencyToGlobalJson(globalJson, parent, dependency))
+                    {
+                        updatedGitFiles.Add(new GitFile(GetVersionFilePath(VersionFiles.GlobalJson, relativeBasePath), globalJson));
+                    }
                 }
-
-                await AddDependencyToGlobalJson(repoUri, branch, parent, dependency, relativeBasePath);
+                else if (!repoHasVersionDetailsProps.Value)
+                {
+                    XmlDocument versionProps = await ReadVersionsPropsAsync(repoUri, null, relativeBasePath);
+                    if (TryAddDependencyToVersionsProps(versionProps, dependency))
+                    {
+                        updatedGitFiles.Add(new GitFile(GetVersionFilePath(VersionFiles.VersionsProps, relativeBasePath), versionProps));
+                    }
+                }
             }
-            else if (!repoHasVersionDetailsProps.Value)
-            {
-                await AddDependencyToVersionsPropsAsync(repoUri, branch, dependency, relativeBasePath);
-            }
+
+            await GetGitClient(repoUri).CommitFilesAsync(updatedGitFiles, repoUri, branch, $"Add {dependency} to {repoUri}");
         }
-    }
-
-    /// <returns>true if the dependency was removed successfully, false if it didn't exist</returns>
-    public async Task<bool> TryRemoveDependencyAsync(
-        string dependencyName,
-        string repoUri,
-        string branch,
-        UnixPath relativeBasePath = null,
-        bool? repoHasVersionDetailsProps = null)
-    {
-        var versionDetails = _versionDetailsParser.ParseVersionDetailsXml(await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath));
-
-        // we only look at the dependency name here because that's what the removal does too
-        if (!versionDetails.Dependencies.Any(d => d.Name.Equals(dependencyName, StringComparison.OrdinalIgnoreCase)))
-        {
-            return false;
-        }
-
-        await RemoveDependencyAsync(dependencyName, repoUri, branch, relativeBasePath, repoHasVersionDetailsProps);
-        return true;
     }
 
     public async Task RemoveDependencyAsync(
@@ -305,54 +287,111 @@ public class DependencyFileManager : IDependencyFileManager
         {
             repoHasVersionDetailsProps = await VersionDetailsPropsExistsAsync(repoUri, branch, relativeBasePath);
         }
+        var versionDetails = await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath);
+        bool dependencyDeletedFromVersionDetails = TryRemoveDependencyFromVersionDetails(dependencyName, versionDetails);
 
-        var updatedVersionDetails = await RemoveDependencyFromVersionDetailsAsync(dependencyName, repoUri, branch, relativeBasePath);
-        var updatedDependencyVersionFile =
-            new GitFile(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), updatedVersionDetails);
-        List<GitFile> gitFiles = [updatedDependencyVersionFile];
+        List<GitFile> updatedGitFiles = [];
 
-        if (repoHasVersionDetailsProps.Value)
+        if (dependencyDeletedFromVersionDetails)
         {
-            gitFiles.Add(new GitFile(
-                GetVersionFilePath(VersionFiles.VersionDetailsProps, relativeBasePath),
-                GenerateVersionDetailsProps(_versionDetailsParser.ParseVersionDetailsXml(updatedVersionDetails))));
-        }
-        else
-        {
-            gitFiles.Add(new GitFile(
-                GetVersionFilePath(VersionFiles.VersionsProps, relativeBasePath),
-                await RemoveDependencyFromVersionPropsAsync(dependencyName, repoUri, branch, relativeBasePath)));
+            updatedGitFiles.Add(new GitFile(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), versionDetails));
+            if (repoHasVersionDetailsProps.Value)
+            {
+                updatedGitFiles.Add(new GitFile(
+                    GetVersionFilePath(VersionFiles.VersionDetailsProps, relativeBasePath),
+                    GenerateVersionDetailsProps(_versionDetailsParser.ParseVersionDetailsXml(versionDetails))));
+            }
         }
 
-        var updatedDotnetTools = await RemoveDotnetToolsDependencyAsync(dependencyName, repoUri, branch, relativeBasePath);
-        if (updatedDotnetTools != null)
+        if (!repoHasVersionDetailsProps.Value)
         {
-            gitFiles.Add(new(GetVersionFilePath(
-                VersionFiles.DotnetToolsConfigJson, relativeBasePath),
-                updatedDotnetTools));
+            var versionsProps = await ReadVersionsPropsAsync(repoUri, branch, relativeBasePath);
+            if (TryRemoveDependencyFromVersionsProps(dependencyName, versionsProps))
+            {
+                updatedGitFiles.Add(new GitFile(GetVersionFilePath(VersionFiles.VersionsProps, relativeBasePath), versionsProps));
+            }
+        }
+
+        JObject dotnetTools = await ReadDotNetToolsConfigJsonAsync(repoUri, branch, relativeBasePath);
+        if (TryRemoveDotnetToolsDependency(dependencyName, dotnetTools))
+        {
+            updatedGitFiles.Add(new(
+                GetVersionFilePath(VersionFiles.DotnetToolsConfigJson, relativeBasePath),
+                dotnetTools));
         }
 
         await GetGitClient(repoUri).CommitFilesAsync(
-            gitFiles,
+            updatedGitFiles,
             repoUri,
             branch,
-            $"Remove {dependencyName} from Version.Details.xml and Version.props'");
+            $"Remove {dependencyName} from {repoUri}'");
 
-        _logger.LogInformation("Dependency '{dependencyName}' removed from " + VersionFiles.VersionDetailsXml, dependencyName);
+        _logger.LogInformation("Dependency '{dependencyName}' removed from {repoUri}", dependencyName, repoUri);
     }
 
-    private async Task<JObject> RemoveDotnetToolsDependencyAsync(string dependencyName, string repoUri, string branch, UnixPath relativeBasePath)
+    public async Task<VersionFileChanges<DependencyUpdate>> TryApplyVersionDetailsChangesAsync(
+        VersionFileChanges<DependencyUpdate> changes,
+        string repoUri,
+        string branch,
+        bool repoHasVersionDetailsProps,
+        UnixPath relativeBasePath = null)
     {
-        var dotnetTools = await ReadDotNetToolsConfigJsonAsync(repoUri, branch, relativeBasePath);
+        VersionFileChanges<DependencyUpdate> appliedChanges = new([], [], []);
 
+        var versionDetails = await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath);
+
+        foreach (var removal in changes.Removals)
+        {
+            if (TryRemoveDependencyFromVersionDetails(removal, versionDetails))
+            {
+                appliedChanges.Removals.Add(removal);
+            }
+        }
+        foreach (var (name, update) in changes.Updates)
+        {
+            if (TryAddOrUpdateVersionDetailsDependency(versionDetails, update.To))
+            {
+                appliedChanges.Updates[name] = update;
+            }
+        }
+        foreach (var (name, addition) in changes.Additions)
+        {
+            if (TryAddOrUpdateVersionDetailsDependency(versionDetails, addition.To))
+            {
+                appliedChanges.Additions[name] = addition;
+            }
+        }
+
+        List<GitFile> updatedGitFiles = [
+            new GitFile(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), versionDetails)
+        ];
+        if (repoHasVersionDetailsProps)
+        {
+            updatedGitFiles.Add(
+                new GitFile(
+                    GetVersionFilePath(VersionFiles.VersionDetailsProps, relativeBasePath),
+                    GenerateVersionDetailsProps(_versionDetailsParser.ParseVersionDetailsXml(versionDetails))));
+        }
+
+        await GetGitClient(repoUri).CommitFilesAsync(
+            updatedGitFiles,
+            repoUri,
+            branch,
+            $"Apply merged dependency changes");
+
+        return appliedChanges;
+    }
+
+    private static bool TryRemoveDotnetToolsDependency(string dependencyName, JObject dotnetTools)
+    {
         if (dotnetTools == null)
         {
-            return null;
+            return false;
         }
 
         if (dotnetTools["tools"] is not JObject tools)
         {
-            return null;
+            return false;
         }
 
         // we have to do this because JObject is case sensitive
@@ -360,38 +399,46 @@ public class DependencyFileManager : IDependencyFileManager
         if (toolProperty != null)
         {
             tools.Remove(toolProperty.Name);
+            return true;
         }
-
-        return dotnetTools;
+        else
+        {
+            return false;
+        }
     }
 
-    private async Task<XmlDocument> RemoveDependencyFromVersionPropsAsync(string dependencyName, string repoUri, string branch, UnixPath relativeBasePath = null)
+    private static bool TryRemoveDependencyFromVersionsProps(string dependencyName, XmlDocument versionsProps)
     {
-        var versionProps = await ReadVersionPropsAsync(repoUri, branch, relativeBasePath);
         string nodeName = VersionFiles.GetVersionPropsPackageVersionElementName(dependencyName);
-        XmlNode element = versionProps.SelectSingleNode($"//{nodeName}");
+        XmlNode element = versionsProps.SelectSingleNode($"//{nodeName}");
         if (element == null)
         {
             string alternateNodeName = VersionFiles.GetVersionPropsAlternatePackageVersionElementName(dependencyName);
-            element = versionProps.SelectSingleNode($"//{alternateNodeName}");
+            element = versionsProps.SelectSingleNode($"//{alternateNodeName}");
         }
 
-        element?.ParentNode.RemoveChild(element);
+        if (element == null)
+        {
+            return false;
+        }
 
-        return versionProps;
+        element.ParentNode.RemoveChild(element);
+        return true;
     }
 
-    private async Task<XmlDocument> RemoveDependencyFromVersionDetailsAsync(string dependencyName, string repoUri, string branch, UnixPath relativeBasePath = null)
+    private static bool TryRemoveDependencyFromVersionDetails(string dependencyName, XmlDocument versionDetails)
     {
-        var versionDetails = await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath);
         XmlNode dependencyNode = versionDetails.SelectSingleNode($"//{VersionDetailsParser.DependencyElementName}[@Name='{dependencyName}']");
 
         if (dependencyNode != null)
         {
             dependencyNode.ParentNode.RemoveChild(dependencyNode);
+            return true;
         }
-
-        return versionDetails;
+        else
+        {
+            return false;
+        }
     }
 
     private static void SetAttribute(XmlDocument document, XmlNode node, string name, string value)
@@ -487,7 +534,7 @@ public class DependencyFileManager : IDependencyFileManager
         // src/arcade version files only get updated during arcade forward flows
         UnixPath relativeBasePath = null;
         XmlDocument versionDetails = await ReadVersionDetailsXmlAsync(repoUri, branch, relativeBasePath);
-        XmlDocument versionProps = await ReadVersionPropsAsync(repoUri, branch, relativeBasePath);
+        XmlDocument versionProps = await ReadVersionsPropsAsync(repoUri, branch, relativeBasePath);
         JObject globalJson = await ReadGlobalJsonAsync(repoUri, branch, relativeBasePath);
         JObject toolsConfigurationJson = await ReadDotNetToolsConfigJsonAsync(repoUri, branch, relativeBasePath);
         (string nugetConfigName, XmlDocument nugetConfig) = await ReadNugetConfigAsync(repoUri, branch);
@@ -971,14 +1018,19 @@ public class DependencyFileManager : IDependencyFileManager
         return null;
     }
 
-    private async Task AddDependencyToVersionDetailsAsync(
-        string repo,
-        string branch,
-        DependencyDetail dependency,
-        bool repoHasVersionDetailsProps,
-        UnixPath relativeBasePath)
+    private bool TryAddOrUpdateVersionDetailsDependency(
+        XmlDocument versionDetails,
+        DependencyDetail dependency)
     {
-        XmlDocument versionDetails = await ReadVersionDetailsXmlAsync(repo, null, relativeBasePath);
+        var versionDetailsParsed = _versionDetailsParser.ParseVersionDetailsXml(versionDetails);
+        if (versionDetailsParsed.Dependencies.Any(d =>
+            d.Name == dependency.Name
+            && d.Version == dependency.Version
+            && d.RepoUri == dependency.RepoUri
+            && d.Commit == dependency.Commit))
+        {
+            return false;
+        }
 
         var existingDependency = FindDependencyElement(versionDetails, dependency);
         if (existingDependency.Count > 1)
@@ -1006,24 +1058,10 @@ public class DependencyFileManager : IDependencyFileManager
             dependenciesNode.AppendChild(newDependency);
         }
 
-        // TODO: This should not be done here.  This should return some kind of generic file container to the caller,
-        // who will gather up all updates and then call the git client to write the files all at once:
-        // https://github.com/dotnet/arcade/issues/1095.  Today this is only called from the Local interface so
-        // it's okay for now.
-        List<GitFile> updatedGitFiles = [new GitFile(GetVersionFilePath(VersionFiles.VersionDetailsXml, relativeBasePath), versionDetails)];
-        if (repoHasVersionDetailsProps)
-        {
-            updatedGitFiles.Add(new GitFile(
-                GetVersionFilePath(VersionFiles.VersionDetailsProps, relativeBasePath),
-                GenerateVersionDetailsProps(_versionDetailsParser.ParseVersionDetailsXml(versionDetails))));
-        }
-
-        await GetGitClient(repo).CommitFilesAsync(updatedGitFiles, repo, branch, $"Add {dependency} to " +
-            $"'{VersionFiles.VersionDetailsXml}'");
-
         _logger.LogInformation(
             $"Dependency '{dependency.Name}' with version '{dependency.Version}' successfully added to " +
             $"'{VersionFiles.VersionDetailsXml}'");
+        return true;
     }
 
     /// <summary>
@@ -1037,9 +1075,8 @@ public class DependencyFileManager : IDependencyFileManager
     /// </summary>
     /// <param name="repo">Path to Versions.props file</param>
     /// <param name="dependency">Dependency information to add.</param>
-    private async Task AddDependencyToVersionsPropsAsync(string repo, string branch, DependencyDetail dependency, UnixPath relativeBasePath)
+    private bool TryAddDependencyToVersionsProps(XmlDocument versionProps, DependencyDetail dependency)
     {
-        XmlDocument versionProps = await ReadVersionPropsAsync(repo, null, relativeBasePath);
         var documentNamespaceUri = versionProps.DocumentElement.NamespaceURI;
 
         var packageVersionElementName = VersionFiles.GetVersionPropsPackageVersionElementName(dependency.Name);
@@ -1053,6 +1090,10 @@ public class DependencyFileManager : IDependencyFileManager
 
         if (existingVersionNode != null)
         {
+            if (existingVersionNode.InnerText == dependency.Version)
+            {
+                return false;
+            }
             existingVersionNode.InnerText = dependency.Version;
         }
         else
@@ -1120,30 +1161,15 @@ public class DependencyFileManager : IDependencyFileManager
             }
         }
 
-        // TODO: This should not be done here.  This should return some kind of generic file container to the caller,
-        // who will gather up all updates and then call the git client to write the files all at once:
-        // https://github.com/dotnet/arcade/issues/1095.  Today this is only called from the Local interface so
-        // it's okay for now.
-        var file = new GitFile(
-            GetVersionFilePath(VersionFiles.VersionsProps, relativeBasePath),
-            versionProps);
-        await GetGitClient(repo).CommitFilesAsync([file], repo, branch, $"Add {dependency} to " +
-            $"'{VersionFiles.VersionsProps}'");
-
-        _logger.LogInformation(
-            $"Dependency '{dependency.Name}' with version '{dependency.Version}' successfully added to " +
-            $"'{VersionFiles.VersionsProps}'");
+        return true;
     }
 
-    private async Task AddDependencyToGlobalJson(
-        string repoUri,
-        string branch,
+    private bool TryAddDependencyToGlobalJson(
+        JObject globalJson,
         string parentField,
-        DependencyDetail dependency,
-        UnixPath relativeBasePath)
+        DependencyDetail dependency)
     {
         JToken versionProperty = new JProperty(dependency.Name, dependency.Version);
-        JObject globalJson = await ReadGlobalJsonAsync(repoUri, branch, relativeBasePath);
         JToken parent = globalJson[parentField];
 
         if (parent != null)
@@ -1155,6 +1181,10 @@ public class DependencyFileManager : IDependencyFileManager
             }
             else
             {
+                if (parent[dependency.Name].ToString() == dependency.Version)
+                {
+                    return false;
+                }    
                 parent[dependency.Name] = dependency.Version;
             }
         }
@@ -1163,16 +1193,8 @@ public class DependencyFileManager : IDependencyFileManager
             globalJson.Add(new JProperty(parentField, new JObject(versionProperty)));
         }
 
-        var file = new GitFile(
-            GetVersionFilePath(VersionFiles.GlobalJson, relativeBasePath),
-            globalJson);
-        await GetGitClient(repoUri).CommitFilesAsync(
-            [file],
-            repoUri,
-            branch,
-            $"Add {dependency.Name} to '{VersionFiles.GlobalJson}'");
-
         _logger.LogInformation("Dependency '{name}' with version '{version}' added to " + VersionFiles.GlobalJson, dependency.Name, dependency.Version);
+        return true;
     }
 
     public static XmlDocument GetXmlDocument(string fileContent)
@@ -1335,7 +1357,7 @@ public class DependencyFileManager : IDependencyFileManager
 
         try
         {
-            versionProps = ReadVersionPropsAsync(repo, branch, relativeBasePath);
+            versionProps = ReadVersionsPropsAsync(repo, branch, relativeBasePath);
         }
         catch (Exception e)
         {

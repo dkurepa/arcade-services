@@ -346,44 +346,13 @@ public class VmrVersionFileMerger : IVmrVersionFileMerger
             : null;
         bool versionDetailsPropsExists = await _dependencyFileManager.VersionDetailsPropsExistsAsync(repo.Path, null!, versionFilesBasePath);
         VersionFileChanges<DependencyUpdate> appliedChanges = new([], [], []);
-        foreach (var removal in changes.Removals)
-        {
-            // Remove the property from the version details
-            if (await _dependencyFileManager.TryRemoveDependencyAsync(removal, repo.Path, null!, versionFilesBasePath, versionDetailsPropsExists))
-            {
-                appliedChanges.Removals.Add(removal);
-            }
-        }
-        foreach ((var assetName, var addition) in changes.Additions)
-        {
-            if (await _dependencyFileManager.TryAddOrUpdateDependency(
-                (DependencyDetail)addition.Value!,
-                repo.Path,
-                null!,
-                versionFilesBasePath,
-                versionDetailsOnly: true,
-                versionDetailsPropsExists))
-            {
-                appliedChanges.Additions[assetName] = addition;
-            }
-        }
-        foreach ((var assetName, var update) in changes.Updates)
-        {
-            if (await _dependencyFileManager.TryAddOrUpdateDependency(
-                (DependencyDetail)update.Value!,
-                repo.Path,
-                null!,
-                versionFilesBasePath,
-                versionDetailsOnly: true,
-                versionDetailsPropsExists))
-            {
-                appliedChanges.Updates[assetName] = update;
-            }
-        }
 
-        await repo.StageAsync(["."]);
-
-        return appliedChanges;
+        return await _dependencyFileManager.TryApplyVersionDetailsChangesAsync(
+            changes,
+            repo.Path,
+            null!,
+            versionDetailsPropsExists,
+            versionFilesBasePath);
     }
 
     private static async Task<string> GetJsonFromGit(ILocalGitRepo repo, string jsonRelativePath, string reference, bool allowMissingFile) =>
