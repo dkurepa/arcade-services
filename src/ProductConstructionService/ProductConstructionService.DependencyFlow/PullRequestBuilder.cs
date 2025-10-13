@@ -622,7 +622,7 @@ internal class PullRequestBuilder : IPullRequestBuilder
             if (shouldAddDirectory)
             {
                 subscriptionSection.AppendLine($"  - 📂 `{(UnixPath.IsEmptyPath(relativePath) ? "root" : relativePath)}`");
-            }
+            } // just a random test
             // Group dependencies by version range and commit range
             var dependencyGroups = updatedDependencies
                 .GroupBy(dep => new
