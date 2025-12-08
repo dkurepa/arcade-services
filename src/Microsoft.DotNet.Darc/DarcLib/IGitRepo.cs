@@ -31,6 +31,8 @@ public interface IGitRepo
 
     Task<List<GitTreeItem>> LsTreeAsync(string uri, string gitRef, string path = null);
 
+    Task<List<string>> FindFilesWithStringAsync(string uri, string branch, string searchString);
+
     async Task<bool> IsRepoVmrAsync(string repoUri, string branch)
     {
         try

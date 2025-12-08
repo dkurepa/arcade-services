@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Maestro.Common;
 using Microsoft.DotNet.DarcLib.Helpers;
 using Microsoft.Extensions.Logging;
+using Octokit;
 
 #nullable enable
 namespace Microsoft.DotNet.DarcLib;
@@ -653,5 +654,20 @@ public class LocalGitClient : ILocalGitClient
         result.ThrowIfFailed("Failed to get a list of conflicted files");
 
         return [.. result.GetOutputLines().Select(f => new UnixPath(f))];
+    }
+
+    public async Task<List<string>> FindFilesWithStringAsync(string repoPath, string branch, string searchString)
+    {
+        var args = new List<string>
+        {
+            "grep",
+            "-l",
+            "-F",
+            searchString,
+            branch,
+        };
+        var result = await _processManager.ExecuteGit(repoPath, args);
+        result.ThrowIfFailed($"Failed to find files with string '{searchString}' in branch '{branch}' of repo '{repoPath}'");
+        return result.GetOutputLines().ToList();
     }
 }
