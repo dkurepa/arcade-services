@@ -1285,6 +1285,24 @@ public class GitHubClient : RemoteRepoBase, IRemoteGitRepo
         return gitTreeItems;
     }
 
+    public async Task<List<string>> FindFilesWithStringAsync(
+        string uri,
+        string branch,
+        string searchString,
+        IReadOnlyList<string>? extensions = null)
+    {
+        var (owner, repo) = ParseRepoUri(uri);
+        var client = GetClient(owner, repo);
+
+        SearchCodeRequest searchRequest = new(searchString)
+        {
+            Extensions = extensions ?? []
+        };
+
+        var response = await client.Search.SearchCode(searchRequest);
+        return response.Items.Select(i => i.Name).ToList();
+    }
+
     private async Task<string> GetCommitShaForGitRefAsync(IGitHubClient client, string owner, string repo, string gitRef)
     {
         string commitSha;

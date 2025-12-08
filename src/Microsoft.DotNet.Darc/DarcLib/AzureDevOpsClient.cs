@@ -1852,6 +1852,93 @@ public class AzureDevOpsClient : RemoteRepoBase, IRemoteGitRepo, IAzureDevOpsCli
         }
     }
 
+    public async Task<List<string>> FindFilesWithStringAsync(
+        string uri,
+        string branch,
+        string searchString,
+        IReadOnlyList<string> extensions = null)
+    {
+        _logger.LogInformation(
+            "Searching for files containing '{SearchString}' in repo '{RepoUri}' on branch '{Branch}'",
+            searchString,
+            uri,
+            branch);
+
+        (string accountName, string projectName, string repoName) = ParseRepoUri(uri);
+
+        var requestBody = new Dictionary<string, object>
+        {
+            ["searchText"] = searchString,
+            ["$skip"] = 0,
+            ["$top"] = 1000, // Max results per request
+            ["filters"] = new Dictionary<string, object>
+            {
+                ["Project"] = new[] { projectName },
+                ["Repository"] = new[] { repoName },
+                ["Branch"] = new[] { branch }
+            }
+        };
+
+        var body = JsonConvert.SerializeObject(requestBody, _serializerSettings);
+
+        try
+        {
+            JObject response = await ExecuteAzureDevOpsAPIRequestAsync(
+                HttpMethod.Post,
+                accountName,
+                projectName,
+                "_apis/search/codesearchresults",
+                _logger,
+                body,
+                versionOverride: "7.1",
+                baseAddressSubpath: "almsearch.");
+
+            var results = new List<string>();
+
+            if (response["results"] is JArray resultsArray)
+            {
+                foreach (var result in resultsArray)
+                {
+                    var path = result["path"]?.ToString();
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        results.Add(path);
+                    }
+                }
+            }
+
+            // Filter by extension client-side if extensions are specified
+            // The Azure DevOps Code Search API doesn't support extension filtering directly
+            if (extensions != null && extensions.Count > 0)
+            {
+                var normalizedExtensions = extensions
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                results = results
+                    .Where(path => normalizedExtensions.Contains(Path.GetExtension(path).TrimStart('.')))
+                    .ToList();
+            }
+
+            _logger.LogDebug(
+                "Found {Count} files containing '{SearchString}' in repo '{RepoUri}' on branch '{Branch}'",
+                results.Count,
+                searchString,
+                uri,
+                branch);
+
+            return results;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogWarning(
+                "Code search returned no results for '{SearchString}' in repo '{RepoUri}' on branch '{Branch}'",
+                searchString,
+                uri,
+                branch);
+            return [];
+        }
+    }
+
     private static PullRequest ToDarcLibPullRequest(GitPullRequest pr) => new()
     {
         Url = pr.Url,

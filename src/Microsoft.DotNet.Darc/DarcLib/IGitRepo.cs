@@ -31,7 +31,16 @@ public interface IGitRepo
 
     Task<List<GitTreeItem>> LsTreeAsync(string uri, string gitRef, string path = null);
 
-    Task<List<string>> FindFilesWithStringAsync(string uri, string branch, string searchString);
+    /// <summary>
+        /// Searches for files in the specified repository branch that contain the given string, optionally
+        /// filtering by file extension.
+    /// </summary>
+    /// <param name="uri">The URI of the repository to search. Cannot be null or empty.</param>
+    /// <param name="branch">The name of the branch within the repository to search. Cannot be null or empty.</param>
+    /// <param name="searchString">The string to search for within the contents of each file. Cannot be null or empty.</param>
+    /// <param name="extension">An optional file extension to filter the search results (for example, "cs", "json"). If null, all file types are
+    /// included.</param>
+    Task<List<string>> FindFilesWithStringAsync(string uri, string branch, string searchString, IReadOnlyList<string> extension = null);
 
     async Task<bool> IsRepoVmrAsync(string repoUri, string branch)
     {

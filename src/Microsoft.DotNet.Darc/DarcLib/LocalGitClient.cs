@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Maestro.Common;
 using Microsoft.DotNet.DarcLib.Helpers;
 using Microsoft.Extensions.Logging;
-using Octokit;
 
 #nullable enable
 namespace Microsoft.DotNet.DarcLib;
@@ -656,7 +655,11 @@ public class LocalGitClient : ILocalGitClient
         return [.. result.GetOutputLines().Select(f => new UnixPath(f))];
     }
 
-    public async Task<List<string>> FindFilesWithStringAsync(string repoPath, string branch, string searchString)
+    public async Task<List<string>> FindFilesWithStringAsync(
+        string repoPath,
+        string branch,
+        string searchString,
+        IReadOnlyList<string>? extensions = null)
     {
         var args = new List<string>
         {
@@ -666,6 +669,12 @@ public class LocalGitClient : ILocalGitClient
             searchString,
             branch,
         };
+
+        if (extensions != null && extensions.Count > 0)
+        {
+            args = [.. args, "--", ..extensions.Select(ex => $"*.{ex}")];
+        }
+
         var result = await _processManager.ExecuteGit(repoPath, args);
         result.ThrowIfFailed($"Failed to find files with string '{searchString}' in branch '{branch}' of repo '{repoPath}'");
         return result.GetOutputLines().ToList();
