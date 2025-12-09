@@ -1926,7 +1926,7 @@ public class AzureDevOpsClient : RemoteRepoBase, IRemoteGitRepo, IAzureDevOpsCli
                 uri,
                 branch);
 
-            return results;
+            return results.Select(r => r.TrimStart('/')).Distinct().ToList();
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {

@@ -677,6 +677,10 @@ public class LocalGitClient : ILocalGitClient
 
         var result = await _processManager.ExecuteGit(repoPath, args);
         result.ThrowIfFailed($"Failed to find files with string '{searchString}' in branch '{branch}' of repo '{repoPath}'");
-        return result.GetOutputLines().ToList();
+        // the result lines have the following format branch:path/to/file, so we have to parse it
+        return result.GetOutputLines()
+            .Select(r => r.Split(':', 2)[1])
+            .Distinct()
+            .ToList();
     }
 }

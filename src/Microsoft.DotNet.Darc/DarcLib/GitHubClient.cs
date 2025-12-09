@@ -1294,13 +1294,24 @@ public class GitHubClient : RemoteRepoBase, IRemoteGitRepo
         var (owner, repo) = ParseRepoUri(uri);
         var client = GetClient(owner, repo);
 
-        SearchCodeRequest searchRequest = new(searchString)
+        // GitHub code search has limitations:
+        // - Only searches the default branch
+        // - Files must be less than 384 KB
+        // - Special characters and phrases may need quoting
+        // Wrap the search string in quotes to treat it as a literal phrase
+        var quotedSearchString = $"\"{searchString}\"";
+
+        var searchRequest = new SearchCodeRequest(quotedSearchString, owner, repo);
+
+        // Add extension filters if provided
+        if (extensions != null && extensions.Count > 0)
         {
-            Extensions = extensions ?? []
-        };
+            searchRequest.Extensions = extensions.Select(ext => ext.TrimStart('.')).ToList();
+        }
 
         var response = await client.Search.SearchCode(searchRequest);
-        return response.Items.Select(i => i.Name).ToList();
+        
+        return response.Items.Select(i => i.Path).Distinct().ToList();
     }
 
     private async Task<string> GetCommitShaForGitRefAsync(IGitHubClient client, string owner, string repo, string gitRef)
