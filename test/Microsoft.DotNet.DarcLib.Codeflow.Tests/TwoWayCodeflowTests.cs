@@ -1272,4 +1272,43 @@ internal class TwoWayCodeflowTests : CodeFlowTests
                 branchName,
                 forceUpdate: false));
     }
+
+    [Test]
+    public async Task OppositeDirectionFlowBug()
+    {
+        const string ffBranchName = nameof(OppositeDirectionFlowBug) + "ff";
+        const string bfBranchName = nameof(OppositeDirectionFlowBug) + "bf";
+
+        await EnsureTestRepoIsInitialized();
+
+        var relativeFilePath = "fileee.txt";
+        // Add a file that will later get deleted in the FF
+        await File.WriteAllTextAsync(ProductRepoPath / relativeFilePath, "not important");
+        await GitOperations.CommitAll(ProductRepoPath, "Add fileee.txt");
+
+        // now open up a forward flow, but don't merge it yet
+        var codeFlowResult = await ChangeRepoFileAndFlowIt("1", ffBranchName, enableRebase: true);
+        codeFlowResult.ShouldHaveUpdates();
+
+        // add some file to the VMR and backflow, with merging
+        await File.WriteAllTextAsync(_productRepoVmrPath / "vmrfile.txt", "also not important");
+        await GitOperations.CommitAll(VmrPath, "add vmrfile.txt");
+        codeFlowResult = await CallBackflow(Constants.ProductRepoName, ProductRepoPath, bfBranchName, enableRebase: true);
+        codeFlowResult.ShouldHaveUpdates();
+        await GitOperations.MergePrBranch(ProductRepoPath, bfBranchName);
+
+        // now checkout the FF branch in the VMR, delete the file and merge the PR
+        await GitOperations.Checkout(VmrPath, ffBranchName);
+        File.Delete(_productRepoVmrPath / relativeFilePath);
+        await GitOperations.CommitAll(VmrPath, "Delete fileee.txt in FF");
+        await GitOperations.MergePrBranch(VmrPath, ffBranchName);
+
+        // now do a second FF, the file will be back and this is a bug
+        codeFlowResult = await ChangeRepoFileAndFlowIt("2", ffBranchName + "2", enableRebase: true);
+        codeFlowResult.ShouldHaveUpdates();
+        await FinalizeForwardFlow(true, ffBranchName + "2");
+
+        // The FF brings back the file (bug), so this is true
+        File.Exists(_productRepoVmrPath / relativeFilePath).Should().BeTrue();
+    }
 }
