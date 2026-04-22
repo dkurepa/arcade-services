@@ -138,12 +138,39 @@ public abstract class CloneManager : ICloneManager
 
                 if (remoteHasBranch.Succeeded)
                 {
-                    // Force-create/update the local branch to track the remote branch
+                    // Force-create/update the local branch to track the remote branch.
+                    // If the branch is currently checked out (in this clone or a worktree),
+                    // `git branch -f` will refuse, so we fall back to resetting the checked-out
+                    // branch to the remote tip instead.
                     var result = await _localGitRepo.RunGitCommandAsync(
                         path,
                         ["branch", "-f", "--track", gitRef, $"{remoteName}/{gitRef}"],
                         cancellationToken);
-                    result.ThrowIfFailed($"Couldn't update local branch {gitRef} to track {remoteName}/{gitRef}");
+
+                    if (!result.Succeeded)
+                    {
+                        var currentBranch = (await _localGitRepo.GetCheckedOutBranchAsync(path)).Trim();
+                        if (string.Equals(currentBranch, gitRef, StringComparison.Ordinal))
+                        {
+                            var resetResult = await _localGitRepo.RunGitCommandAsync(
+                                path,
+                                ["reset", "--hard", $"{remoteName}/{gitRef}"],
+                                cancellationToken);
+                            resetResult.ThrowIfFailed($"Couldn't reset local branch {gitRef} to {remoteName}/{gitRef}");
+
+                            // Make sure the upstream tracking is set up as well
+                            var trackResult = await _localGitRepo.RunGitCommandAsync(
+                                path,
+                                ["branch", "--set-upstream-to", $"{remoteName}/{gitRef}", gitRef],
+                                cancellationToken);
+                            trackResult.ThrowIfFailed($"Couldn't set upstream of {gitRef} to {remoteName}/{gitRef}");
+                        }
+                        else
+                        {
+                            result.ThrowIfFailed($"Couldn't update local branch {gitRef} to track {remoteName}/{gitRef}");
+                        }
+                    }
+
                     refsToVerify.Remove(gitRef);
                     continue;
                 }
