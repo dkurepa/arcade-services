@@ -204,5 +204,168 @@ internal partial class ScenarioTests_CodeFlow : CodeFlowScenarioTestBase
         });
     }
 
+    [Test]
+    public async Task Vmr_InterleavedBackflowAndForwardFlowTest()
+    {
+        var channelName = GetTestChannelName();
+        var branchName = GetTestBranchName();
 
+        using TemporaryDirectory vmrDirectory = await CloneRepositoryAsync(TestRepository.VmrTestRepoName);
+        using TemporaryDirectory repoDirectory = await CloneRepositoryAsync(TestRepository.TestRepo1Name);
+
+        var firstBackflowFileInVmr = Path.Combine(vmrDirectory.Directory, "src", TestRepository.TestRepo1Name, TestFile1Name);
+        var forwardFlowFileInRepo = Path.Combine(repoDirectory.Directory, TestFile2Name);
+        var repoOnlyFileInRepo = Path.Combine(repoDirectory.Directory, "newFile3.txt");
+        var secondBackflowFileInVmr = Path.Combine(vmrDirectory.Directory, "src", TestRepository.TestRepo1Name, "newFile4.txt");
+        var secondBackflowFileInRepo = Path.Combine(repoDirectory.Directory, "newFile4.txt");
+
+        await CreateTargetBranchAndExecuteTest(branchName, vmrDirectory.Directory, async () =>
+        {
+            await CreateTargetBranchAndExecuteTest(branchName, repoDirectory.Directory, async () =>
+            {
+                await CreateTestChannelAsync(channelName);
+
+                var backflowSubscriptionId = await CreateBackwardFlowSubscriptionAsync(
+                    channelName,
+                    TestRepository.VmrTestRepoName,
+                    TestRepository.TestRepo1Name,
+                    branchName,
+                    UpdateFrequency.None.ToString(),
+                    TestParameters.GitHubTestOrg,
+                    sourceDirectory: TestRepository.TestRepo1Name);
+
+                var forwardFlowSubscriptionId = await CreateForwardFlowSubscriptionAsync(
+                    channelName,
+                    TestRepository.TestRepo1Name,
+                    TestRepository.VmrTestRepoName,
+                    branchName,
+                    UpdateFrequency.None.ToString(),
+                    TestParameters.GitHubTestOrg,
+                    targetDirectory: TestRepository.TestRepo1Name);
+
+                TestContext.WriteLine("Mimicking repo-main <-> vmr-main with one branch in each repo");
+
+                TestContext.WriteLine("Making a change in the VMR and opening a backflow PR");
+                await ChangeAndPushAFile(
+                    vmrDirectory.Directory,
+                    firstBackflowFileInVmr,
+                    "content #1 from the VMR",
+                    "Open the first backflow");
+
+                string vmrSha;
+                using (ChangeDirectory(vmrDirectory.Directory))
+                {
+                    vmrSha = (await GitGetCurrentSha()).TrimEnd();
+                }
+
+                Build vmrBuild = await CreateBuildAsync(
+                    GetGitHubRepoUrl(TestRepository.VmrTestRepoName),
+                    branchName,
+                    vmrSha,
+                    "1",
+                    []);
+
+                await AddBuildToChannelAsync(vmrBuild.Id, channelName);
+                await TriggerSubscriptionAsync(backflowSubscriptionId);
+
+                var backflowPr = await WaitForPullRequestAsync(TestRepository.TestRepo1Name, branchName);
+                await using var backflowPrCleanup = CleanUpPullRequestAfter(
+                    TestParameters.GitHubTestOrg,
+                    TestRepository.TestRepo1Name,
+                    backflowPr);
+
+                TestContext.WriteLine("Making a change in the repo and opening a forward flow PR");
+                await ChangeAndPushAFile(
+                    repoDirectory.Directory,
+                    forwardFlowFileInRepo,
+                    "content #1 from the repo",
+                    "Open the forward flow");
+
+                string repoSha;
+                using (ChangeDirectory(repoDirectory.Directory))
+                {
+                    repoSha = (await GitGetCurrentSha()).TrimEnd();
+                }
+
+                Build repoBuild = await CreateBuildAsync(
+                    GetGitHubRepoUrl(TestRepository.TestRepo1Name),
+                    branchName,
+                    repoSha,
+                    "2",
+                    []);
+
+                await AddBuildToChannelAsync(repoBuild.Id, channelName);
+                await TriggerSubscriptionAsync(forwardFlowSubscriptionId);
+
+                var forwardPr = await WaitForPullRequestAsync(TestRepository.VmrTestRepoName, branchName);
+                await using var forwardPrCleanup = CleanUpPullRequestAfter(
+                    TestParameters.GitHubTestOrg,
+                    TestRepository.VmrTestRepoName,
+                    forwardPr);
+
+                var vmrRepo = await GitHubApi.Repository.Get(TestParameters.GitHubTestOrg, TestRepository.VmrTestRepoName);
+                await MergePullRequestAsync(TestRepository.VmrTestRepoName, forwardPr);
+                await WaitForMergedPullRequestAsync(TestRepository.VmrTestRepoName, branchName, forwardPr, vmrRepo);
+
+                using (ChangeDirectory(vmrDirectory.Directory))
+                {
+                    await RunGitAsync("fetch", "origin", branchName);
+                    await RunGitAsync("checkout", branchName);
+                    await RunGitAsync("reset", "--hard", $"origin/{branchName}");
+                }
+
+                backflowPr = await GitHubApi.PullRequest.Get(TestParameters.GitHubTestOrg, TestRepository.TestRepo1Name, backflowPr.Number);
+                Assert.That(backflowPr.State.Value, Is.EqualTo(Octokit.ItemState.Open), "The backflow PR should remain open while the histories collide");
+
+                TestContext.WriteLine("Pushing another repo change without triggering flow");
+                await ChangeAndPushAFile(
+                    repoDirectory.Directory,
+                    repoOnlyFileInRepo,
+                    "content #2 from the repo, not flowed",
+                    "Push repo-only change");
+
+                var openForwardPrs = await GitHubApi.PullRequest.GetAllForRepository(
+                    vmrRepo.Id,
+                    new Octokit.PullRequestRequest
+                    {
+                        Base = branchName,
+                        State = Octokit.ItemStateFilter.Open,
+                    });
+
+                Assert.That(openForwardPrs, Is.Empty, "No new forward flow PR should exist until the subscription is triggered again");
+
+                TestContext.WriteLine("Making another VMR change and triggering backflow again");
+                await ChangeAndPushAFile(
+                    vmrDirectory.Directory,
+                    secondBackflowFileInVmr,
+                    "content #2 from the VMR",
+                    "Open the second backflow");
+
+                using (ChangeDirectory(vmrDirectory.Directory))
+                {
+                    vmrSha = (await GitGetCurrentSha()).TrimEnd();
+                }
+
+                vmrBuild = await CreateBuildAsync(
+                    GetGitHubRepoUrl(TestRepository.VmrTestRepoName),
+                    branchName,
+                    vmrSha,
+                    "3",
+                    []);
+
+                await AddBuildToChannelAsync(vmrBuild.Id, channelName);
+                await TriggerSubscriptionAsync(backflowSubscriptionId);
+
+                var updatedBackflowPr = await WaitForUpdatedPullRequestAsync(TestRepository.TestRepo1Name, branchName);
+                Assert.That(updatedBackflowPr.Number, Is.EqualTo(backflowPr.Number), "The second backflow should update the existing PR");
+
+                await WaitForFileContentInPullRequest(
+                    repoDirectory.Directory,
+                    TestRepository.TestRepo1Name,
+                    branchName,
+                    secondBackflowFileInRepo,
+                    "content #2 from the VMR");
+            });
+        });
+    }
 }
