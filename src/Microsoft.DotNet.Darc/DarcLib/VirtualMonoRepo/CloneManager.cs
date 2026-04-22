@@ -126,21 +126,33 @@ public abstract class CloneManager : ICloneManager
             // Verify that all requested commits are available
             foreach (string gitRef in refsToVerify.ToArray())
             {
+                // First check if the remote we just fetched has a branch with this name.
+                // If so, force the local branch to point at the remote's tip. This ensures
+                // that stale local branches left over from previous runs get refreshed
+                // with the latest updates from the remote, instead of being silently reused.
+                var remoteName = await _localGitRepo.AddRemoteIfMissingAsync(path, remoteUri, cancellationToken);
+                var remoteHasBranch = await _localGitRepo.RunGitCommandAsync(
+                    path,
+                    ["rev-parse", "--verify", "--quiet", $"refs/remotes/{remoteName}/{gitRef}"],
+                    cancellationToken);
+
+                if (remoteHasBranch.Succeeded)
+                {
+                    // Force-create/update the local branch to track the remote branch
+                    var result = await _localGitRepo.RunGitCommandAsync(
+                        path,
+                        ["branch", "-f", "--track", gitRef, $"{remoteName}/{gitRef}"],
+                        cancellationToken);
+                    result.ThrowIfFailed($"Couldn't update local branch {gitRef} to track {remoteName}/{gitRef}");
+                    refsToVerify.Remove(gitRef);
+                    continue;
+                }
+
+                // Not a branch on this remote - might be a SHA, tag, or a local-only branch
                 var gitRefType = await _localGitRepo.GetRefType(path, gitRef, cancellationToken);
                 if (gitRefType != GitObjectType.Unknown)
                 {
                     refsToVerify.Remove(gitRef);
-
-                    // Force-create the local branch to track the remote branch
-                    if (gitRefType == GitObjectType.RemoteRef)
-                    {
-                        var remoteName = await _localGitRepo.AddRemoteIfMissingAsync(path, remoteUri, cancellationToken);
-                        var result = await _localGitRepo.RunGitCommandAsync(
-                            path,
-                            ["branch", "-f", "--track", gitRef, $"{remoteName}/{gitRef}"],
-                            cancellationToken);
-                        result.ThrowIfFailed($"Couldn't create local branch for remote ref {gitRef} from {remoteName}");
-                    }
                 }
             }
 
