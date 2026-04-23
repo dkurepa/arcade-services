@@ -42,8 +42,7 @@ public class PullRequestCommentBuilder : IPullRequestCommentBuilder
         Subscription subscription,
         IReadOnlyCollection<UnixPath> conflictedFiles,
         string prHeadBranch,
-        bool prIsEmpty,
-        bool unsafeFlow)
+        bool prIsEmpty)
     {
         var comment = new StringBuilder()
             .Append(prIsEmpty ? "# :rotating_light: Action Required" : "# :stop_sign: Codeflow Paused")
@@ -83,17 +82,6 @@ public class PullRequestCommentBuilder : IPullRequestCommentBuilder
             .Split('+')
             .First();
 
-        var unsafeMessage = unsafeFlow
-            ? $"""
-
-            If you don't care about about the changes made in the VMR, and just want the vmr branch to match your repo you can use
-            ```bash
-            darc vmr reset --build {update.BuildId} {subscription.TargetDirectory ?? subscription.SourceDirectory}
-            ```
-            from the local vmr clone.
-            """
-            : string.Empty;
-
         comment
             .AppendLine(
             $"""
@@ -113,8 +101,8 @@ public class PullRequestCommentBuilder : IPullRequestCommentBuilder
                 ```
             3. Run from repo's git clone and follow the instructions provided by the command to stage the conflict locally
                 ```bash
-                darc vmr resolve-conflict --subscription {subscription.Id} {(unsafeFlow ? "--unsafe" : "")}
-                ```{unsafeMessage}
+                darc vmr resolve-conflict --subscription {subscription.Id}
+                ```
                 This should apply the build `{update.BuildId}` with sources from [`{Microsoft.DotNet.DarcLib.Commit.GetShortSha(update.SourceSha)}`]({GitRepoUrlUtils.GetRepoAtCommitUri(update.SourceRepo, update.SourceSha)})
             4. Resolve the conflicts, commit & push the changes
             5. Once pushed, the `Codeflow verification` check will turn green.  

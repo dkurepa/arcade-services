@@ -30,7 +30,6 @@ internal interface IPcsVmrBackFlower : IVmrBackFlower
         Build build,
         string targetBranch,
         bool forceUpdate,
-        bool unsafeFlow,
         CancellationToken cancellationToken = default);
 }
 
@@ -60,7 +59,6 @@ internal class PcsVmrBackFlower : VmrBackFlower, IPcsVmrBackFlower
         Build build,
         string headBranch,
         bool forceUpdate,
-        bool unsafeFlow,
         CancellationToken cancellationToken = default)
     {
         (bool headBranchExisted, SourceMapping mapping, LastFlows lastFlows, ILocalGitRepo targetRepo) = await PrepareVmrAndRepo(
@@ -69,7 +67,7 @@ internal class PcsVmrBackFlower : VmrBackFlower, IPcsVmrBackFlower
             subscription.TargetBranch,
             headBranch,
             targetRepoPath: null,
-            unsafeFlow,
+            unsafeFlow: false,
             cancellationToken);
 
         CodeFlowResult result = await FlowBackAsync(
@@ -82,7 +80,7 @@ internal class PcsVmrBackFlower : VmrBackFlower, IPcsVmrBackFlower
                 subscription.ExcludedAssets,
                 KeepConflicts: true,
                 forceUpdate,
-                unsafeFlow,
+                UnsafeFlow: false,
                 UseRecreationFallback: true),
             targetRepo,
             lastFlows,
