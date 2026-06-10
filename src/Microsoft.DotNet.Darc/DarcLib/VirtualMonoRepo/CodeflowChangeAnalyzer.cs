@@ -4,9 +4,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.DotNet.DarcLib.Helpers;
 using Microsoft.DotNet.DarcLib.Models;
+using Microsoft.DotNet.DarcLib.Models.VirtualMonoRepo;
 using Microsoft.DotNet.ProductConstructionService.Client.Models;
 using Microsoft.Extensions.Logging;
 
@@ -16,6 +18,20 @@ namespace Microsoft.DotNet.DarcLib.VirtualMonoRepo;
 public interface ICodeflowChangeAnalyzer
 {
     Task<bool> ForwardFlowHasMeaningfulChangesAsync(string mappingName, string headBranch, string targetBranch);
+
+    /// <summary>
+    /// Verifies that a forward-flow codeflow PR (source repo -> VMR) faithfully contains the source
+    /// repo's commit diff (oldSha...newSha), accounting for the expected divergences (path remap,
+    /// excludes, eng/common, version files, no-ops).
+    /// </summary>
+    Task<SourceDiffVerificationResult> VerifyForwardFlowAsync(
+        string mappingName,
+        string sourceRepoUri,
+        string oldSha,
+        string newSha,
+        string vmrTargetBranch,
+        string vmrHeadBranch,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -39,6 +55,9 @@ public class CodeflowChangeAnalyzer : ICodeflowChangeAnalyzer
     private readonly ILocalGitRepoFactory _localGitRepoFactory;
     private readonly IVersionDetailsParser _versionDetailsParser;
     private readonly IBasicBarClient _barClient;
+    private readonly IRepositoryCloneManager _cloneManager;
+    private readonly IVmrDependencyTracker _dependencyTracker;
+    private readonly ISourceManifest _sourceManifest;
     private readonly IVmrInfo _vmrInfo;
     private readonly ILogger<CodeflowChangeAnalyzer> _logger;
 
@@ -46,12 +65,18 @@ public class CodeflowChangeAnalyzer : ICodeflowChangeAnalyzer
         ILocalGitRepoFactory localGitRepoFactory,
         IVersionDetailsParser versionDetailsParser,
         IBasicBarClient barClient,
+        IRepositoryCloneManager cloneManager,
+        IVmrDependencyTracker dependencyTracker,
+        ISourceManifest sourceManifest,
         IVmrInfo vmrInfo,
         ILogger<CodeflowChangeAnalyzer> logger)
     {
         _localGitRepoFactory = localGitRepoFactory;
         _versionDetailsParser = versionDetailsParser;
         _barClient = barClient;
+        _cloneManager = cloneManager;
+        _dependencyTracker = dependencyTracker;
+        _sourceManifest = sourceManifest;
         _vmrInfo = vmrInfo;
         _logger = logger;
     }
@@ -232,5 +257,232 @@ public class CodeflowChangeAnalyzer : ICodeflowChangeAnalyzer
             ..b.Assets.Select(a => a.Version).Distinct(),
             ..darcFeeds,
         ];
+    }
+
+    public async Task<SourceDiffVerificationResult> VerifyForwardFlowAsync(
+        string mappingName,
+        string sourceRepoUri,
+        string oldSha,
+        string newSha,
+        string vmrTargetBranch,
+        string vmrHeadBranch,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "Verifying forward flow PR for {mappingName} against source diff {oldSha}...{newSha}",
+            mappingName,
+            oldSha,
+            newSha);
+
+        ILocalGitRepo vmr = _localGitRepoFactory.Create(_vmrInfo.VmrPath);
+        var srcMappingPath = VmrInfo.GetRelativeRepoSourcesPath(mappingName);
+
+        await vmr.CheckoutAsync(vmrHeadBranch);
+        await _dependencyTracker.RefreshMetadataAsync();
+        SourceMapping mapping = _dependencyTracker.GetMapping(mappingName);
+
+        var exclusionPathspecs = GetDiffFilters(mapping, _sourceManifest);
+
+        // Obtain a local clone of the source repo containing both SHAs.
+        ILocalGitRepo sourceRepo = await _cloneManager.PrepareCloneAsync(
+            mapping,
+            [sourceRepoUri],
+            [oldSha, newSha],
+            newSha,
+            resetToRemote: false,
+            cancellationToken);
+
+        // Phase 1 - name-only partition (mapping-relative paths).
+        HashSet<string> referenceFiles = await GetReferenceFilesAsync(sourceRepo, mappingName, oldSha, newSha, exclusionPathspecs, cancellationToken);
+        HashSet<string> actualFiles = await GetActualFilesAsync(vmr, mappingName, srcMappingPath, vmrTargetBranch, vmrHeadBranch, cancellationToken);
+
+        var intersection = referenceFiles.Where(actualFiles.Contains).ToList();
+        var referenceOnly = referenceFiles.Where(f => !actualFiles.Contains(f)).ToList();
+        var unexpectedFiles = actualFiles.Where(f => !referenceFiles.Contains(f)).ToList();
+
+        var appliedFiles = new List<string>();
+        var noOpFiles = new List<string>();
+        var mismatchedFiles = new List<string>();
+
+        // Phase 2 - per-file content compare on the intersection.
+        foreach (var file in intersection)
+        {
+            if (await ChangedLinesMatchAsync(sourceRepo, vmr, file, srcMappingPath, oldSha, newSha, vmrTargetBranch, vmrHeadBranch, cancellationToken))
+            {
+                appliedFiles.Add(file);
+            }
+            else
+            {
+                mismatchedFiles.Add(file);
+            }
+        }
+
+        // No-op check on files the source changed but the PR did not.
+        foreach (var file in referenceOnly)
+        {
+            if (await IsLegitimateNoOpAsync(sourceRepo, vmr, file, srcMappingPath, newSha, vmrHeadBranch))
+            {
+                noOpFiles.Add(file);
+            }
+            else
+            {
+                mismatchedFiles.Add(file);
+            }
+        }
+
+        var result = new SourceDiffVerificationResult
+        {
+            AppliedFiles = appliedFiles,
+            NoOpFiles = noOpFiles,
+            MismatchedFiles = mismatchedFiles,
+            UnexpectedFiles = unexpectedFiles,
+        };
+
+        _logger.LogInformation(
+            "Source diff verification for {mappingName} complete: {applied} applied, {noOp} no-op, {mismatched} mismatched, {unexpected} unexpected",
+            mappingName,
+            result.AppliedFiles.Count,
+            result.NoOpFiles.Count,
+            result.MismatchedFiles.Count,
+            result.UnexpectedFiles.Count);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the git pathspec exclusion rules the same way VmrDiffOperation.GetDiffFilters does:
+    /// the mapping's excludes plus submodule paths under the mapping, turned into git exclusion rules.
+    /// </summary>
+    private static IReadOnlyCollection<string> GetDiffFilters(SourceMapping mapping, ISourceManifest manifest)
+    {
+        var submodules = manifest.Submodules
+            .Where(s => s.Path.StartsWith(mapping.Name + '/', StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.Path.Substring(mapping.Name.Length + 1));
+
+        return (mapping.Exclude ?? [])
+            .Concat(submodules)
+            .Select(VmrPatchHandler.GetExclusionRule)
+            .ToList();
+    }
+
+    /// <summary>
+    /// R - the set of mapping-relative paths the source diff should contribute, after dropping
+    /// excluded/submodule paths, eng/common (non-arcade) and version/metadata files.
+    /// </summary>
+    private async Task<HashSet<string>> GetReferenceFilesAsync(
+        ILocalGitRepo sourceRepo,
+        string mappingName,
+        string oldSha,
+        string newSha,
+        IReadOnlyCollection<string> exclusionPathspecs,
+        CancellationToken cancellationToken)
+    {
+        var result = await sourceRepo.ExecuteGitCommand(
+            ["diff", "--name-only", $"{oldSha}...{newSha}", "--", ".", .. exclusionPathspecs],
+            cancellationToken);
+        result.ThrowIfFailed($"Failed to get the source diff between {oldSha} and {newSha}");
+
+        return FilterMappingFiles(result.GetOutputLines(), mappingName);
+    }
+
+    /// <summary>
+    /// A - the set of mapping-relative paths the PR changed under src/&lt;mapping&gt;/, after stripping
+    /// the prefix and dropping eng/common (non-arcade) and version/metadata files.
+    /// </summary>
+    private async Task<HashSet<string>> GetActualFilesAsync(
+        ILocalGitRepo vmr,
+        string mappingName,
+        string srcMappingPath,
+        string vmrTargetBranch,
+        string vmrHeadBranch,
+        CancellationToken cancellationToken)
+    {
+        var result = await vmr.ExecuteGitCommand(
+            ["diff", "--name-only", $"{vmrTargetBranch}...{vmrHeadBranch}", "--", $"{srcMappingPath}/"],
+            cancellationToken);
+        result.ThrowIfFailed($"Failed to get the VMR diff between {vmrTargetBranch} and {vmrHeadBranch}");
+
+        var prefix = srcMappingPath + "/";
+        var mappingRelativeFiles = result.GetOutputLines()
+            .Where(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.Substring(prefix.Length));
+
+        return FilterMappingFiles(mappingRelativeFiles, mappingName);
+    }
+
+    /// <summary>
+    /// Drops eng/common (for non-arcade mappings) and codeflow version/metadata files, which are
+    /// expected to legitimately diverge between the source repo and the VMR.
+    /// </summary>
+    private static HashSet<string> FilterMappingFiles(IEnumerable<string> files, string mappingName)
+    {
+        var engCommonPrefix = Constants.CommonScriptFilesPath + "/";
+        var dropEngCommon = mappingName != VmrInfo.ArcadeMappingName;
+
+        return files
+            .Where(f => !DependencyFileManager.CodeflowDependencyFiles.Contains(f, StringComparer.OrdinalIgnoreCase))
+            .Where(f => !dropEngCommon || !f.StartsWith(engCommonPrefix, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Compares the zero-context change lines of a single file between the source diff and the PR.
+    /// Lines that belong to the diff format (and are expected to differ) are ignored before comparing.
+    /// </summary>
+    private async Task<bool> ChangedLinesMatchAsync(
+        ILocalGitRepo sourceRepo,
+        ILocalGitRepo vmr,
+        string file,
+        string srcMappingPath,
+        string oldSha,
+        string newSha,
+        string vmrTargetBranch,
+        string vmrHeadBranch,
+        CancellationToken cancellationToken)
+    {
+        var sourceResult = await sourceRepo.ExecuteGitCommand(["diff", "-U0", $"{oldSha}...{newSha}", "--", file], cancellationToken);
+        sourceResult.ThrowIfFailed($"Failed to get the source diff of {file} between {oldSha} and {newSha}");
+
+        var vmrResult = await vmr.ExecuteGitCommand(["diff", "-U0", $"{vmrTargetBranch}...{vmrHeadBranch}", "--", $"{srcMappingPath}/{file}"], cancellationToken);
+        vmrResult.ThrowIfFailed($"Failed to get the VMR diff of {file} between {vmrTargetBranch} and {vmrHeadBranch}");
+
+        var sourceChanges = GetChangeLines(sourceResult);
+        var vmrChanges = GetChangeLines(vmrResult);
+
+        return sourceChanges.SequenceEqual(vmrChanges);
+    }
+
+    /// <summary>
+    /// Keeps only the +/- change lines from a zero-context diff, dropping the diff-format lines that
+    /// are expected to differ between the source repo and its VMR copy.
+    /// </summary>
+    private static List<string> GetChangeLines(ProcessExecutionResult diffResult)
+    {
+        return diffResult.GetOutputLines()
+            .Where(line => (line.StartsWith('+') || line.StartsWith('-')) && !IgnoredDiffLines.Any(line.StartsWith))
+            .ToList();
+    }
+
+    /// <summary>
+    /// A file the source changed but the PR did not is only legitimate when the VMR copy is already
+    /// at the source's new state (equal content, or both absent for an already-reconciled deletion).
+    /// </summary>
+    private async Task<bool> IsLegitimateNoOpAsync(
+        ILocalGitRepo sourceRepo,
+        ILocalGitRepo vmr,
+        string file,
+        string srcMappingPath,
+        string newSha,
+        string vmrHeadBranch)
+    {
+        var sourceContent = await sourceRepo.GetFileFromGitAsync(file, newSha);
+        var vmrContent = await vmr.GetFileFromGitAsync($"{srcMappingPath}/{file}", vmrHeadBranch);
+
+        if (sourceContent == null && vmrContent == null)
+        {
+            return true;
+        }
+
+        return string.Equals(sourceContent, vmrContent, StringComparison.Ordinal);
     }
 }
