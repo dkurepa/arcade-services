@@ -1628,4 +1628,87 @@ internal class TwoWayCodeflowTests : CodeFlowTests
         var act = () => ChangeVmrFileAndFlowIt("2", repoBranchName2);
         await act.Should().ThrowAsync<BackflowNonContinuableNonLinearCodeflowException>();
     }
+
+    // This test reproduces a silent duplication that git's default 3-way text merge can produce.
+    // When the merge base does not contain a given chunk and both sides independently add a similar
+    // (but not identical) chunk in the same region, git concatenates both additions without reporting
+    // a conflict. In codeflow this corrupts a file (e.g. duplicate C# methods => CS0111) even though
+    // the merge is reported as clean.
+    //
+    // The content is taken from a real-world occurrence in dotnet/runtime's ObjectiveCMarshal.cs:
+    // the GetOrCreateReferenceTrackingMemory method does not exist in the merge base, and two branches
+    // each added their own (differently implemented) version of it. The full file contents are used as
+    // resources so the surrounding documentation and code provide the same diff anchors git sees in real life.
+    //
+    // The setup that triggers it:
+    //   1. The file (without the method) is forward flown so repo and VMR are in sync.
+    //   2. A backflow PR is opened (but NOT merged) - it carries the pre-method state of the file.
+    //   3. The repo adds the first version of the method.
+    //   4. That first version is forward flown into the VMR and merged.
+    //   5. The backflow PR from step 2 is merged, resetting the repo's last-sync point to before the method.
+    //   6. The repo adds the second version of the method.
+    //   7. The next forward flow's 3-way merge sees the method in neither merge base, added independently
+    //      on both sides, and silently concatenates both - duplicating the method.
+    [Test]
+    public async Task SilentMergeDuplicationForwardFlowTest()
+    {
+        const string fileName = "ObjectiveCMarshal.cs";
+        var repoFile = ProductRepoPath / fileName;
+        var vmrFile = _productRepoVmrPath / fileName;
+
+        var baseContent = await File.ReadAllTextAsync(CodeflowTestsOneTimeSetUp.ResourcesPath / "ObjectiveCMarshal.base.cs.txt");
+        var addedVersion1 = await File.ReadAllTextAsync(CodeflowTestsOneTimeSetUp.ResourcesPath / "ObjectiveCMarshal.v1.cs.txt");
+        var addedVersion2 = await File.ReadAllTextAsync(CodeflowTestsOneTimeSetUp.ResourcesPath / "ObjectiveCMarshal.v2.cs.txt");
+
+        await EnsureTestRepoIsInitialized();
+
+        // 1. Establish the base version of the file in the repo and forward flow it into the VMR
+        var forwardBranchName = GetTestBranchName(forwardFlow: true);
+        await GitOperations.Checkout(ProductRepoPath, "main");
+        await File.WriteAllTextAsync(repoFile, baseContent);
+        await GitOperations.CommitAll(ProductRepoPath, "Add ObjectiveCMarshal.cs base version");
+        var codeFlowResult = await CallForwardflow(Constants.ProductRepoName, ProductRepoPath, forwardBranchName);
+        codeFlowResult.ShouldHaveUpdates();
+        await FinalizeForwardFlow(forwardBranchName);
+
+        // 2. Open a backflow PR carrying an unrelated VMR change, but do NOT merge it yet.
+        //    At this point the VMR's ObjectiveCMarshal.cs is still the base version (without the method).
+        var backBranchName = GetTestBranchName();
+        codeFlowResult = await ChangeVmrFileAndFlowIt("unrelated change", backBranchName);
+        codeFlowResult.ShouldHaveUpdates();
+        await GitOperations.CommitAll(ProductRepoPath, "Commit flown changes to backflow branch");
+
+        // 3. Add the first version of GetOrCreateReferenceTrackingMemory to the repo
+        await GitOperations.Checkout(ProductRepoPath, "main");
+        await File.WriteAllTextAsync(repoFile, addedVersion1);
+        await GitOperations.CommitAll(ProductRepoPath, "Add GetOrCreateReferenceTrackingMemory (version 1)");
+
+        // 4. Forward flow that first version into the VMR and merge it
+        forwardBranchName = GetTestBranchName(forwardFlow: true);
+        codeFlowResult = await CallForwardflow(Constants.ProductRepoName, ProductRepoPath, forwardBranchName);
+        codeFlowResult.ShouldHaveUpdates();
+        await FinalizeForwardFlow(forwardBranchName);
+
+        // 5. Merge the backflow PR opened in step 2 - this resets the repo's last-sync point
+        //    back to before the method existed in the VMR.
+        await FinalizeBackFlow(backBranchName);
+
+        // 6. Add the second version of GetOrCreateReferenceTrackingMemory to the repo
+        //    (same signature and surrounding anchors, different body)
+        await GitOperations.Checkout(ProductRepoPath, "main");
+        await File.WriteAllTextAsync(repoFile, addedVersion2);
+        await GitOperations.CommitAll(ProductRepoPath, "Add GetOrCreateReferenceTrackingMemory (version 2)");
+
+        // 7. Forward flow again - git reports a clean merge (no conflict)...
+        forwardBranchName = GetTestBranchName(forwardFlow: true);
+        codeFlowResult = await CallForwardflow(Constants.ProductRepoName, ProductRepoPath, forwardBranchName);
+        codeFlowResult.ShouldHaveUpdates();
+        codeFlowResult.ConflictedFiles.Should().BeEmpty();
+        await FinalizeForwardFlow(forwardBranchName);
+
+        // ...but the file must not contain the silently duplicated method.
+        var merged = await File.ReadAllTextAsync(vmrFile);
+        var methodCount = merged.Split("public static Span<IntPtr> GetOrCreateReferenceTrackingMemory(object obj)").Length - 1;
+        methodCount.Should().Be(1, "the 3-way merge must not silently duplicate the GetOrCreateReferenceTrackingMemory method");
+    }
 }
