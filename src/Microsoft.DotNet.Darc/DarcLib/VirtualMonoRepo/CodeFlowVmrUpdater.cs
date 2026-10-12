@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,6 +37,13 @@ public interface ICodeFlowVmrUpdater
         string? fromSha = null,
         bool resetToRemoteWhenCloningRepo = false,
         bool keepConflicts = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates VMR-owned generated files after the forward-flow branch has been merged and all conflicts resolved.
+    /// </summary>
+    Task UpdateGeneratedFilesAsync(
+        IReadOnlyCollection<string> changedFiles,
         CancellationToken cancellationToken = default);
 }
 
@@ -168,10 +176,10 @@ public class CodeFlowVmrUpdater : VmrManagerBase, ICodeFlowVmrUpdater
                 keepConflicts,
                 new CodeFlowParameters(
                     AdditionalRemotes: [.. remotes.Select(r => new AdditionalRemote(mapping.Name, r))],
-                    TpnTemplatePath: _vmrInfo.ThirdPartyNoticesTemplateFullPath,
+                    TpnTemplatePath: null,
                     GenerateCodeOwners: false,
-                    GenerateCredScanSuppressions: true,
-                    GenerateCodeQLConfig: true),
+                    GenerateCredScanSuppressions: false,
+                    GenerateCodeQLConfig: false),
                 additionalFileExclusions,
                 cancellationToken);
 
@@ -182,5 +190,20 @@ public class CodeFlowVmrUpdater : VmrManagerBase, ICodeFlowVmrUpdater
             _logger.LogInformation(e.Message);
             return new CodeFlowResult(false, [], _vmrInfo.VmrPath, []);
         }
+    }
+
+    public async Task UpdateGeneratedFilesAsync(
+        IReadOnlyCollection<string> changedFiles,
+        CancellationToken cancellationToken = default)
+    {
+        await UpdateGeneratedFilesAsync(
+            new CodeFlowParameters(
+                AdditionalRemotes: [],
+                TpnTemplatePath: _vmrInfo.ThirdPartyNoticesTemplateFullPath,
+                GenerateCodeOwners: false,
+                GenerateCredScanSuppressions: true,
+                GenerateCodeQLConfig: true),
+            changedFiles,
+            cancellationToken);
     }
 }

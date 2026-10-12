@@ -101,25 +101,7 @@ public abstract partial class VmrManagerBase
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (codeFlowParameters.TpnTemplatePath != null)
-        {
-            await UpdateThirdPartyNoticesAsync(codeFlowParameters.TpnTemplatePath, cancellationToken);
-        }
-
-        if (codeFlowParameters.GenerateCodeOwners)
-        {
-            await _codeownersGenerator.UpdateCodeowners(cancellationToken);
-        }
-
-        if (codeFlowParameters.GenerateCredScanSuppressions)
-        {
-            await _credScanSuppressionsGenerator.UpdateCredScanSuppressions(cancellationToken);
-        }
-
-        if (codeFlowParameters.GenerateCodeQLConfig)
-        {
-            await _codeQLConfigGenerator.UpdateCodeQLConfig(cancellationToken);
-        }
+        await UpdateGeneratedFilesAsync(codeFlowParameters, cancellationToken: cancellationToken);
 
         if (conflicts.Count == 0)
         {
@@ -148,10 +130,43 @@ public abstract partial class VmrManagerBase
         _logger.LogDebug("Committed in {duration} seconds", (int)watch.Elapsed.TotalSeconds);
     }
 
-    private async Task UpdateThirdPartyNoticesAsync(string templatePath, CancellationToken cancellationToken)
+    protected async Task UpdateGeneratedFilesAsync(
+        CodeFlowParameters codeFlowParameters,
+        IReadOnlyCollection<string>? changedFiles = null,
+        CancellationToken cancellationToken = default)
     {
-        var isTpnUpdated = (await _localGitClient
-            .GetStagedFilesAsync(_vmrInfo.VmrPath))
+        if (codeFlowParameters.TpnTemplatePath != null)
+        {
+            await UpdateThirdPartyNoticesAsync(
+                codeFlowParameters.TpnTemplatePath,
+                cancellationToken,
+                changedFiles);
+        }
+
+        if (codeFlowParameters.GenerateCodeOwners)
+        {
+            await _codeownersGenerator.UpdateCodeowners(cancellationToken);
+        }
+
+        if (codeFlowParameters.GenerateCredScanSuppressions)
+        {
+            await _credScanSuppressionsGenerator.UpdateCredScanSuppressions(cancellationToken);
+        }
+
+        if (codeFlowParameters.GenerateCodeQLConfig)
+        {
+            await _codeQLConfigGenerator.UpdateCodeQLConfig(cancellationToken);
+        }
+    }
+
+    private async Task UpdateThirdPartyNoticesAsync(
+        string templatePath,
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? changedFiles)
+    {
+        changedFiles ??= await _localGitClient.GetStagedFilesAsync(_vmrInfo.VmrPath);
+
+        var isTpnUpdated = changedFiles
             .Where(ThirdPartyNoticesGenerator.IsTpnPath)
             .Any();
 

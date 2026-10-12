@@ -444,17 +444,30 @@ public class VmrForwardFlower : VmrCodeFlower, IVmrForwardFlower
             pathFilter: null,
             cancellationToken);
 
+        // We try to merge the target branch so that we can potentially
+        // resolve some expected conflicts in the version files
+        IReadOnlyCollection<UnixPath> conflictedFiles = await _conflictResolver.TryMergingBranchAndUpdateDependencies(
+            codeflowOptions,
+            vmr,
+            sourceRepo,
+            lastFlowsAfterRecreation,
+            headBranchExisted,
+            cancellationToken);
+
+        IReadOnlyCollection<string> committedFiles = await vmr.GetChangedFilesAsync(
+            codeflowOptions.TargetBranch,
+            "HEAD");
+        IReadOnlyCollection<string> stagedFiles = await vmr.GetStagedFilesAsync();
+        IReadOnlyCollection<string> changedFiles = committedFiles
+            .Concat(stagedFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        await _vmrUpdater.UpdateGeneratedFilesAsync(changedFiles, cancellationToken);
+
         return result with
         {
-            // We try to merge the target branch so that we can potentially
-            // resolve some expected conflicts in the version files
-            ConflictedFiles = await _conflictResolver.TryMergingBranchAndUpdateDependencies(
-                codeflowOptions,
-                vmr,
-                sourceRepo,
-                lastFlowsAfterRecreation,
-                headBranchExisted,
-                cancellationToken)
+            ConflictedFiles = conflictedFiles
         };
     }
 

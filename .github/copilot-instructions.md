@@ -63,6 +63,7 @@ After making changes, validate by testing these workflows:
 - Prefer async/await over Task.Result or .Wait()
 - Async methods must have an "Async" suffix.
 - Use cancellation tokens for async operations when appropriate
+- Place `CancellationToken` last in parameter lists and give it a default value of `default`.
 - Avoid using booleans solely to signal success, unless failure is an expected frequent outcome (e.g. TryGet methods).
 - Do not return null unless explicitly indicated (e.g., TryCreate).
 - Validate early; if validation fails, throw or return immediately.

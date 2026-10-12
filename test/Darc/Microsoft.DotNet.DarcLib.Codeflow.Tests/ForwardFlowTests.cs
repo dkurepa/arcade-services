@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.DotNet.DarcLib.Codeflow.Tests.Helpers;
@@ -18,6 +19,63 @@ namespace Microsoft.DotNet.DarcLib.Codeflow.Tests;
 [TestFixture]
 internal class ForwardFlowTests : CodeFlowTests
 {
+    [Test]
+    public async Task GeneratedFilesAreUpdatedWhenSourceConflictsRemain()
+    {
+        const string noticeFileName = "THIRD-PARTY-NOTICES.txt";
+        const string noticeTemplatePath = "eng/ThirdPartyNotices.Template.txt";
+        const string initialNotice = "Initial notice";
+        const string updatedNotice = "Updated notice";
+        const string staleAggregate = "Aggregate changed on the target branch";
+        NativePath repoNoticePath = ProductRepoPath / noticeFileName;
+        NativePath aggregateNoticePath = VmrPath / VmrInfo.ThirdPartyNoticesFileName;
+        NativePath sourceMappingsPath = VmrPath / VmrInfo.DefaultRelativeSourceMappingsPath;
+
+        JsonObject sourceMappings = JsonNode
+            .Parse(await File.ReadAllTextAsync(sourceMappingsPath))!
+            .AsObject();
+        sourceMappings["thirdPartyNoticesTemplatePath"] = noticeTemplatePath;
+        await File.WriteAllTextAsync(sourceMappingsPath, sourceMappings.ToJsonString());
+        await GitOperations.CommitAll(VmrPath, "Enable third-party notice generation");
+
+        await EnsureTestRepoIsInitialized();
+
+        await File.WriteAllTextAsync(repoNoticePath, initialNotice);
+        await GitOperations.CommitAll(ProductRepoPath, "Add third-party notice");
+
+        string initialFlowBranch = GetTestBranchName(forwardFlow: true);
+        var result = await CallForwardflow(
+            Constants.ProductRepoName,
+            ProductRepoPath,
+            initialFlowBranch);
+
+        result.ShouldHaveUpdates();
+        (await File.ReadAllTextAsync(aggregateNoticePath)).Should().Contain(initialNotice);
+        await FinalizeForwardFlow(initialFlowBranch);
+
+        await File.WriteAllTextAsync(aggregateNoticePath, staleAggregate);
+        await File.WriteAllTextAsync(_productRepoVmrFilePath, "Conflicting change in the VMR");
+        await GitOperations.CommitAll(VmrPath, "Change generated aggregate and source on target branch");
+
+        await File.WriteAllTextAsync(repoNoticePath, updatedNotice);
+        await File.WriteAllTextAsync(_productRepoFilePath, "Conflicting change in the repository");
+        await GitOperations.CommitAll(ProductRepoPath, "Update third-party notice and source");
+
+        string updatedFlowBranch = GetTestBranchName(forwardFlow: true);
+        result = await CallForwardflow(
+            Constants.ProductRepoName,
+            ProductRepoPath,
+            updatedFlowBranch);
+
+        result.ShouldHaveUpdates();
+        result.HadConflicts.Should().BeTrue();
+        result.ConflictedFiles.Should().Contain(
+            VmrInfo.GetRelativeRepoSourcesPath(Constants.ProductRepoName) / _productRepoFileName);
+        string aggregateNotice = await File.ReadAllTextAsync(aggregateNoticePath);
+        aggregateNotice.Should().Contain(updatedNotice);
+        aggregateNotice.Should().NotContain(staleAggregate);
+    }
+
     [Test]
     public async Task OnlyForwardflowsTest()
     {
