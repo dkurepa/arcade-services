@@ -246,6 +246,7 @@ internal static class Program
         new GatherDropCommandLineOptions(),
         new GetAssetCommandLineOptions(),
         new GetBuildCommandLineOptions(),
+        new GetBuildCommitInclusionCommandLineOptions(),
         new GetChannelCommandLineOptions(),
         new GetChannelsCommandLineOptions(),
         new GetDefaultChannelsCommandLineOptions(),

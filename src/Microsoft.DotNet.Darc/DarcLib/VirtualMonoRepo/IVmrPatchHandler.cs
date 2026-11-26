@@ -30,6 +30,16 @@ public interface IVmrPatchHandler
         bool applyToIndex = true,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Creates a single patch, failing if it is too large to apply without splitting.
+    /// </summary>
+    Task<VmrIngestionPatch> CreateSinglePatchAsync(
+        string patchPath,
+        string sha1,
+        string sha2,
+        NativePath workingDir,
+        CancellationToken cancellationToken = default);
+
     Task<List<VmrIngestionPatch>> CreatePatches(
         SourceMapping mapping,
         ILocalGitRepo clone,

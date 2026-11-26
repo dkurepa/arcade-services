@@ -346,6 +346,33 @@ public class CommandLineParsingTests
     }
 
     [Test]
+    public void BuildCommitInclusionBindsRequiredBuildAndMultipleCommits()
+    {
+        var options = Parse(
+            new GetBuildCommitInclusionCommandLineOptions(),
+            "get-build-commit-inclusion",
+            "--build", "42",
+            "https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@1234567",
+            "https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@abcdef0",
+            "--output-format", "json");
+
+        options.Build.Should().Be(42);
+        options.Commits.Should().Equal(
+            "https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@1234567",
+            "https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@abcdef0");
+        options.OutputFormat.Should().Be(DarcOutputType.json);
+    }
+
+    [Test]
+    public void BuildCommitInclusionRequiresBuildAndAtLeastOneCommit()
+    {
+        ParseResultOf(new GetBuildCommitInclusionCommandLineOptions(), "get-build-commit-inclusion", "--build", "42")
+            .Errors.Should().NotBeEmpty();
+        ParseResultOf(new GetBuildCommitInclusionCommandLineOptions(), "get-build-commit-inclusion", "repo@1234567")
+            .Errors.Should().NotBeEmpty();
+    }
+
+    [Test]
     public void AliasesInNestedCommandsResolveAgainstTheCommandThatOwnsThem()
     {
         // 'darc vmr backflow' resolves '-p' two levels down, and the value starts with 'p', which is

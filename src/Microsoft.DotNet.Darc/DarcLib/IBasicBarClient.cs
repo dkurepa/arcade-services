@@ -104,6 +104,13 @@ public interface IBasicBarClient
     Task<Build> GetBuildAsync(int buildId, bool includeAssetLocation = false);
 
     /// <summary>
+    ///     Retrieve the build and its dependency graph.
+    /// </summary>
+    /// <param name="buildId">Id of the root build.</param>
+    /// <returns>Builds in the dependency graph.</returns>
+    Task<IReadOnlyCollection<Build>> GetBuildGraphAsync(int buildId);
+
+    /// <summary>
     ///     Get a list of builds for the given repo uri and commit.
     /// </summary>
     /// <param name="repoUri">Repository uri</param>

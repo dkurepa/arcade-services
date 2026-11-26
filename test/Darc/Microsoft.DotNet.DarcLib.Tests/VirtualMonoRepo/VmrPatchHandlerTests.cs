@@ -181,6 +181,41 @@ public class VmrPatchHandlerTests
         _fileSystem.Verify(x => x.DeleteFile(patch.Path), Times.Once);
     }
 
+    [TestCase(999_999_999L, false)]
+    [TestCase(1_000_000_000L, true)]
+    [TestCase(1_000_000_001L, true)]
+    public async Task SinglePatchRejectsOversizeWithoutSplitting(long length, bool tooLarge)
+    {
+        var patchPath = _patchDir / "single.patch";
+        _fileSystem.Setup(x => x.GetFileInfo(patchPath))
+            .Returns(Mock.Of<IFileInfo>(info => info.Exists && info.Length == length));
+
+        Func<Task<VmrIngestionPatch>> action = () => _patchHandler.CreateSinglePatchAsync(
+            patchPath, Sha1, Sha2, _repoClone.Path, CancellationToken.None);
+
+        if (tooLarge)
+        {
+            await action.Should().ThrowAsync<DarcException>().WithMessage("*too large to apply without splitting*");
+            _fileSystem.Verify(x => x.DeleteFile(patchPath), Times.Once);
+        }
+        else
+        {
+            var result = await action();
+            result.Should().Be(new VmrIngestionPatch(patchPath, (string?)null));
+            _fileSystem.Verify(x => x.DeleteFile(patchPath), Times.Never);
+        }
+
+        _fileSystem.Verify(x => x.GetFiles(It.IsAny<string>()), Times.Never);
+        _fileSystem.Verify(x => x.GetDirectories(It.IsAny<string>()), Times.Never);
+        _processManager.Verify(x => x.Execute(
+            "git",
+            It.Is<IEnumerable<string>>(args => args.Contains($"{Sha1}..{Sha2}")),
+            It.IsAny<TimeSpan?>(),
+            _repoClone.Path,
+            It.IsAny<Dictionary<string, string>?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Test]
     public async Task CreateSubmodulePatchesDoesNotUpdateManifestTest()
     {

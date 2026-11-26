@@ -288,6 +288,11 @@ public class BarApiClient : IBarApiClient
         return _barClient.Builds.GetBuildAsync(buildId, includeAssetLocation);
     }
 
+    public async Task<IReadOnlyCollection<Build>> GetBuildGraphAsync(int buildId)
+    {
+        return (await _barClient.Builds.GetBuildGraphAsync(buildId)).Builds.Values;
+    }
+
     /// <summary>
     ///     Get a list of builds for the given repo uri and commit.
     /// </summary>

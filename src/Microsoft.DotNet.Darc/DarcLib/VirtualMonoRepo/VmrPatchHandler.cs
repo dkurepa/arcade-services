@@ -492,6 +492,34 @@ public class VmrPatchHandler : IVmrPatchHandler
         return files;
     }
 
+    public async Task<VmrIngestionPatch> CreateSinglePatchAsync(
+        string patchPath,
+        string sha1,
+        string sha2,
+        NativePath workingDir,
+        CancellationToken cancellationToken = default)
+    {
+        var patch = await CreatePatch(
+            patchPath,
+            sha1,
+            sha2,
+            path: null,
+            filters: null,
+            relativePaths: false,
+            workingDir: workingDir,
+            applicationPath: null,
+            ignoreLineEndings: false,
+            cancellationToken: cancellationToken);
+
+        if (_fileSystem.GetFileInfo(patch.Path).Length >= MaxPatchSize)
+        {
+            _fileSystem.DeleteFile(patch.Path);
+            throw new DarcException($"Patch {patch.Path} is too large to apply without splitting.");
+        }
+
+        return patch;
+    }
+
     /// <summary>
     /// Creates patches and if any is > 1GB, splits it into smaller ones.
     /// </summary>

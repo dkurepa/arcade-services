@@ -46,6 +46,7 @@ use darc to achieve them, as well as a general reference guide to darc commands.
   - [gather-drop](#gather-drop) - Gather a drop of the outputs for a build.
   - [get-asset](#get-asset) - Get information about an asset.
   - [get-build](#get-build) - Retrieves a specific build of a repository,
+  - [get-build-commit-inclusion](#get-build-commit-inclusion) - Check whether commits are included in a build.
   - [get-channels](#get-channels) - Get a list of channels.
   - [get-default-channels](#get-default-channels) - Gets a list of repo+branch combinations and their associated default channels for builds.
   - [get-dependencies](#get-dependencies) - Get local dependencies.
@@ -2146,6 +2147,30 @@ Channels:
 **See also**:
 
 - [get-asset](#get-asset)
+
+### **`get-build-commit-inclusion`**
+
+Reports whether Azure DevOps repository commits are included in a BAR build.
+Pass the required `--build` id and one or more `<repoUrl>@<sha>` arguments;
+SHAs must contain 7 to 40 hexadecimal characters. Use `--output-format json`
+for JSON instead of the default text output. As with other DARC commands,
+verbose logs or warnings may appear on stdout before the JSON.
+
+The command follows product dependencies in the same graph as BarViz, which is
+limited to 11 dependency edges. Released dependencies and their subtrees are
+excluded. If a requested repository has conflicting commits in the graph, no
+commits are checked. Otherwise, commits are checked by ancestry and, if needed,
+by reverse-applying their patch. A patch of 1 GB or larger fails the command.
+
+The command reuses DARC's temporary clones. The clone manager resets reused
+clones and may delete and re-clone an unusable clone.
+
+**Sample**:
+```
+darc get-build-commit-inclusion --build 284512 \
+  https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@4f1c2e9 \
+  https://dev.azure.com/dnceng/internal/_git/dotnet-runtime@9ab01c3
+```
 
 ### **`get-channels`**
 

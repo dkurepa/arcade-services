@@ -361,7 +361,7 @@ public class SqlBarClient : ISqlBarClient
     }
 
     private static BuildRef ToClientModelBuildDependency(Data.Models.BuildDependency other)
-        => new(other.BuildId, other.IsProduct, other.TimeToInclusionInMinutes);
+        => new(other.DependentBuildId, other.IsProduct, other.TimeToInclusionInMinutes);
 
     private static SubscriptionPolicy ToClientModelSubscriptionPolicy(Data.Models.SubscriptionPolicy other)
         => new(other.Batchable, (UpdateFrequency)other.UpdateFrequency);
@@ -437,6 +437,12 @@ public class SqlBarClient : ISqlBarClient
         {
             return null;
         }
+    }
+
+    public async Task<IReadOnlyCollection<Build>> GetBuildGraphAsync(int buildId)
+    {
+        var builds = await _context.GetBuildGraphAsync(buildId);
+        return builds.Select(ToClientModelBuild).ToList();
     }
 
     public async Task<Channel> GetChannelAsync(int channelId)

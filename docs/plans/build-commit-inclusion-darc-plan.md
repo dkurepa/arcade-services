@@ -18,6 +18,7 @@ darc get-build-commit-inclusion --build <buildId> <repoUrl>@<sha> [<repoUrl2>@<s
   - Each value is split on the **last** `@`. Legacy AzDO URLs can contain user info (`https://dnceng@dnceng.visualstudio.com/...`), so a split on the first `@` would break them. Shas never contain `@`.
   - A value without `@`, or with an empty repository or sha, is a usage error.
 - `--output-format`: `text` (default) and `json`.
+  - Logging follows existing darc behavior: diagnostic messages go to stdout, so verbose output or warnings may precede the JSON.
 - Exit code: `0` when the evaluation completes, whatever the inclusion results. It is non-zero only for invalid input or errors, following the operation conventions. Not-included commits and an incoherent graph are normal results.
 
 Example:
@@ -50,7 +51,7 @@ New folder `src/Microsoft.DotNet.Darc/DarcLib/BuildCommitInclusion/` containing:
   - **Contract:**
     - A check returns `true` when it proves the commit's content is in the build, and `false` otherwise.
     - Each check must leave the clone checked out at `BuildCommit` with a clean index and working tree, even when it fails, e.g. by resetting in a `finally` block.
-    - Unexpected errors (git failures, I/O) propagate. A check doesn't swallow them into `false`.
+    - Patch-creation, cleanup, and reset errors propagate. A failed reverse `git apply` is a normal `false` result.
   - **Pipeline:** checks run in registration order and stop at the first `true`, which gives `Included`. If every check returns `false`, the result is `NotIncluded`.
     - The existence check (`CommitNotFound`) is a precondition, not a pipeline check, because it produces its own status and no check can run without the commit.
   - Initial checks, in order:
@@ -71,7 +72,7 @@ There is no graph method on `IBasicBarClient` today. Add:
 
 - `Task<IReadOnlyCollection<Build>> GetBuildGraphAsync(int buildId)` on `IBasicBarClient`.
 - `BarApiClient` (darc) implements it with `_barClient.Builds.GetBuildGraphAsync(buildId)`, the existing generated client for `GET /api/builds/{id}/graph`, and returns `BuildGraph.Builds.Values`.
-- `SqlBarClient` (PCS) implements it with `_context.GetBuildGraphAsync(buildId)` and `ToClientModelBuild`. That mapping already includes `Released` and `Dependencies` with `IsProduct`, so a future service host gets the same data.
+- `SqlBarClient` (PCS) implements it with `_context.GetBuildGraphAsync(buildId)` and `ToClientModelBuild`. The dependency mapping must use `DependentBuildId`, not the containing build's `BuildId`, so the SQL and API graphs have the same edges.
 - Every other implementation of `IBasicBarClient`, including test fakes, must implement the new method. Find them all when implementing.
 
 ### Darc (thin host)
@@ -81,13 +82,13 @@ There is no graph method on `IBasicBarClient` today. Add:
   - `tmpPath` follows the same resolution as `VmrCommandLineOptionsBase.RegisterVmrServices`: `DARC_TMP_DIR`, else `%TEMP%/<Constants.DefaultDarcClonesDirectoryName>`, created with `Directory.CreateDirectory`. It can't be reused directly because it passes `VmrPath`, so copy the logic or extract a shared static helper.
   - **The options must not derive from `VmrCommandLineOptionsBase`.** That base defaults `VmrPath` to the current directory, and `VmrCloneManager.GetClonePath` returns `IVmrInfo.VmrPath` when it is set. The command would then fetch and check out inside whatever repository the user runs it from.
   - With `vmrPath: null`, the VMR is cloned to `<tmp>/vmrs/<hash>`. Repository clones go to `<tmp>/<hash of repo URI>`, the same places codeflow commands use.
-  - Clones are never deleted after the command, so later runs reuse them and only fetch. There is no `--vmr` option for now.
+  - Clones are reused across runs. The existing clone managers reset reused clones and may delete and re-clone an unusable clone. There is no `--vmr` option for now.
 - `GetBuildCommitInclusionOperation`:
   - Parses the positional values.
   - Calls `IBuildCommitInclusionChecker.CheckAsync`.
   - Prints the result as text or JSON (Newtonsoft, as other darc operations do).
   - Catches `DarcException`, logs its message and returns a non-zero exit code, as `ResetSubmoduleOperation` does.
-- Darc wiring: follow the `add-darc-command` skill (`.github/skills/add-darc-command/SKILL.md`) for how verbs are registered and the file layout.
+- Darc wiring: add the options instance to `Program.GetOptions()`; the current CLI registers verbs explicitly.
 - `docs/Darc.md`: add the verb to the Index and the Command Reference, following `.github/instructions/darc-docs.instructions.md`.
 
 ## Core behavior
@@ -99,7 +100,7 @@ Invalid input throws `DarcException`, with all errors in its message. The checks
 - The commits list is empty.
 - A repository is not an AzDO URL (`GitRepoUrlUtils.ParseTypeFromUri` must return `AzureDevOps`). **Only AzDO is supported**; GitHub URLs are rejected.
 - A sha doesn't match `^[0-9a-f]{7,40}$` after trimming and lowercasing. This also prevents values that git would read as options.
-- The build doesn't exist (`GetBuildAsync` returns null).
+- The build doesn't exist (`SqlBarClient.GetBuildAsync` returns null; the API client reports HTTP 404).
 - The build has no `AzureDevOpsRepository`.
 - The build is a VMR build and a requested repository is not the VMR.
 - The build is a released non-VMR build. Released builds are excluded from the graph walk, so the root would otherwise silently be reported as "not in build".
@@ -117,7 +118,7 @@ Normalization: shas are lowercased, repository URLs normalized (see below), and 
 - Each requested sha is checked against `build.Commit`.
 
 ### Case B: non-VMR build (walk the build graph)
-- The graph comes from `IBasicBarClient.GetBuildGraphAsync(build.Id)`, the same data BarViz shows.
+- The graph comes from `IBasicBarClient.GetBuildGraphAsync(build.Id)`, the same data BarViz shows. The existing graph query stops after 11 dependency edges.
 - The walk starts at the root and follows product dependency edges only (`BuildRef.IsProduct`). Released builds are skipped together with their subtrees, matching BarViz's `BuildGraphData`.
 - The whole non-released graph is always walked; the walk doesn't stop at the first match. A deeper build of the same repository can have a different commit.
 
@@ -139,15 +140,16 @@ The existence check runs first, as a precondition. Then the [check pipeline](#da
 
 1. **Existence (precondition).** `GetObjectTypeAsync(sha)` on the returned `ILocalGitRepo` runs first, because `IsAncestorCommit` throws on unknown objects. If the object is not a commit, the result is `CommitNotFound` and the pipeline doesn't run.
    - Clones fetch only with `git remote update`, so a sha reachable only from a PR ref is reported as `CommitNotFound`.
+   - The existing helper reports Git failures as `Unknown`, so an operational failure here can also result in `CommitNotFound`.
 2. **`AncestorCommitInclusionCheck`.** Returns `IsAncestorCommit(ancestor: sha, descendant: buildCommit)`. Equal commits count as included.
 3. **`PatchReverseApplyCommitInclusionCheck`.** Runs only if the ancestry check returned `false`. A commit can still be in the build after a rebase, squash or cherry-pick, where its content is there but the sha isn't. What matters is whether the content is in the build.
-   - Create the patch with `IVmrPatchHandler.CreatePatches(patchPath, sha1: $"{sha}^", sha2: sha, path: null, filters: null, relativePaths: false, workingDir: clone.Path, applicationPath: null, ct)`. This is the existing `git diff --binary <sha>^..<sha>`. For merge commits, `^` is the first parent.
-   - The patch file goes under `IVmrInfo.TmpPath` with a unique name and is deleted after use (`removePatchAfter: true`).
+   - Create one patch with `IVmrPatchHandler.CreateSinglePatchAsync(patchPath, sha1: $"{sha}^", sha2: sha, workingDir: clone.Path, ct)`. This reuses the existing `git diff --binary <sha>^..<sha>` implementation without splitting. For merge commits, `^` is the first parent.
+   - Patches of 1 GB or larger fail explicitly. The existing splitter enumerates the build checkout and can omit changed paths that are absent there.
+   - The patch file goes under `IVmrInfo.TmpPath` with a unique name and is deleted in a `finally` block, including for empty patches and failed applications.
    - If the patch is empty, the commit has no content to check and the check returns `true`. `ApplyPatch` already treats an empty patch as a no-op success.
    - Reverse-apply with `IVmrPatchHandler.ApplyPatch(patch, clone.Path, removePatchAfter: true, keepConflicts: false, reverseApply: true, applyToIndex: true, ct)`.
      - If it succeeds, every change in the commit is present at the build commit, so the check returns `true` (`Included`).
-     - If it throws `PatchApplicationFailedException`, the check returns `false`. Other exceptions propagate.
-     - `CreatePatches` can split patches larger than 1 GB into several. The check returns `true` only if all of them reverse-apply.
+     - If it throws `PatchApplicationFailedException`, including for an operational `git apply` failure, the check returns `false`. Patch-creation, cleanup, and reset errors propagate.
    - **Clone state:** the clone must be checked out at the build commit. `PrepareCloneAsync` and `PrepareVmrAsync` already check out `buildCommit`.
      - `applyToIndex: true` uses `git apply --cached`, so the patch is applied against the index, which is the build commit.
      - `ApplyPatch` then runs `git checkout .`, which leaves the index modified.
@@ -161,8 +163,8 @@ The existence check runs first, as a precondition. Then the [check pipeline](#da
      - `--ignore-space-change` is always on in `ApplyPatch`, so whitespace-only differences are ignored.
 
 ### Errors
-- Git, network and BAR errors propagate. darc reports them as command failures.
-- Error messages are not rewritten in the core; any rewriting is up to the host.
+- Git, network and BAR errors propagate except for the existence and reverse-apply limitations noted above. darc reports propagated errors as command failures.
+- A missing build is reported as a validation error whether the BAR client returns null or HTTP 404.
 
 ### Result
 Models (immutable records):
@@ -227,6 +229,7 @@ The text output lists, per repository, the status and resolved build/commit, the
     - empty patch → `true`
     - root commit uses the empty tree as the patch base
     - `git reset --hard <buildCommit>` runs after both success and failure
+    - patches at or above the size limit fail without splitting
 - `test/Darc/Microsoft.DotNet.Darc.Tests`: parsing of `<repoUrl>@<sha>`, including URLs with user info (split on the last `@`) and malformed values.
 - `BarApiClient` / `SqlBarClient.GetBuildGraphAsync` are thin mappings. Add tests only if a matching test fixture exists.
 

@@ -334,6 +334,20 @@ darc get-build
   option --repo short=- required=False separator=- default=- type=String prop=Repo help=Full url of the repository that was built, or match on substring
   option --verbose short=- required=False separator=- default=False type=Boolean prop=Verbose help=Turn on verbose output.
 
+darc get-build-commit-inclusion
+  help: Reports whether repository commits are included in a BAR build.
+  value[0] meta=commits required=True type=list<String> prop=Commits help=Azure DevOps repository and commit pairs in <repoUrl>@<sha> format.
+  option --azdev-pat short=- required=False separator=- default=- type=String prop=AzureDevOpsPat help=Optional token used to authenticate to Azure DevOps. When not provided, local credentials are used.
+  option --bar-uri short=- required=False separator=- default=- type=String prop=BuildAssetRegistryBaseUri help=URI of the build asset registry service to use.
+  option --build short=- required=True separator=- default=- type=Int32 prop=Build help=BAR build id.
+  option --ci short=- required=False separator=- default=False type=Boolean prop=IsCi help=Designates that darc is run from a CI environment with some features disabled (e.g. interactive browser sign-in to Maestro)
+  option --debug short=- required=False separator=- default=False type=Boolean prop=Debug help=Turn on debug output.
+  option --git-location short=- required=False separator=- default=git type=String prop=GitLocation help=Location of git executable used for internal commands.
+  option --github-pat short=- required=False separator=- default=- type=String prop=GitHubPat help=Token used to authenticate GitHub.
+  option --output-format short=- required=False separator=- default=text type=DarcOutputType prop=OutputFormat help=Desired output type of darc. Valid values are 'json' and 'text'. Case sensitive.
+  option --password short=-p required=False separator=- default=- type=String prop=BuildAssetRegistryToken help=Token used to authenticate to BAR. When omitted, Azure CLI or an interactive browser login flow are used.
+  option --verbose short=- required=False separator=- default=False type=Boolean prop=Verbose help=Turn on verbose output.
+
 darc get-channel
   help: Get a specific channel.
   option --azdev-pat short=- required=False separator=- default=- type=String prop=AzureDevOpsPat help=Optional token used to authenticate to Azure DevOps. When not provided, local credentials are used.
